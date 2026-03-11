@@ -25,8 +25,8 @@ export default function Players() {
       >
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white mb-2">Draft Board</h1>
-            <p className="text-muted-foreground">Comprehensive database of all tracked prospects.</p>
+            <h1 className="text-3xl font-display font-bold text-white mb-2">2026 Draft Board</h1>
+            <p className="text-muted-foreground">Comprehensive database of college prospects entering the 2026 NFL Draft.</p>
           </div>
           
           <div className="flex items-center gap-3">

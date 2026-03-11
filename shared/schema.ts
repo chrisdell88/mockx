@@ -10,6 +10,12 @@ export const players = pgTable("players", {
   height: text("height"),
   weight: integer("weight"),
   rasScore: numeric("ras_score"),
+  fortyYard: numeric("forty_yard"),
+  benchPress: integer("bench_press"),
+  verticalJump: numeric("vertical_jump"),
+  broadJump: integer("broad_jump"),
+  coneDrill: numeric("cone_drill"),
+  shuttleRun: numeric("shuttle_run"),
   imageUrl: text("image_url"),
 });
 

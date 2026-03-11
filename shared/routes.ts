@@ -39,6 +39,18 @@ export const api = {
         }),
         404: errorSchemas.notFound,
       }
+    },
+    rankings: {
+      method: 'GET' as const,
+      path: '/api/players/:id/rankings' as const,
+      responses: {
+        200: z.array(z.object({
+          sourceName: z.string(),
+          pickNumber: z.number(),
+          publishedAt: z.string().optional(),
+        })),
+        404: errorSchemas.notFound,
+      }
     }
   },
   mockDrafts: {

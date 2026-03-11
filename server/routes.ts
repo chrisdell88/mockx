@@ -56,6 +56,25 @@ export async function registerRoutes(
     }
   });
 
+  app.get(api.players.rankings.path, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid player ID" });
+      }
+      
+      const player = await storage.getPlayer(id);
+      if (!player) {
+        return res.status(404).json({ message: "Player not found" });
+      }
+      
+      const rankings = await storage.getPlayerRankings(id);
+      res.json(rankings);
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get(api.mockDrafts.list.path, async (req, res) => {
     try {
       const mockDrafts = await storage.getMockDrafts();
@@ -103,7 +122,7 @@ export async function registerRoutes(
 async function seedDatabase() {
   const existingPlayers = await storage.getPlayers();
   if (existingPlayers.length === 0) {
-    // Add Players
+    // Add 2026 Draft Prospect Players
     const p1 = await storage.createPlayer({
       name: "Caleb Williams",
       college: "USC",
@@ -111,6 +130,12 @@ async function seedDatabase() {
       height: "6'1\"",
       weight: 215,
       rasScore: "8.5",
+      fortyYard: "4.85",
+      benchPress: 27,
+      verticalJump: "35.5",
+      broadJump: 132,
+      coneDrill: "6.88",
+      shuttleRun: "4.17",
       imageUrl: "https://images.unsplash.com/photo-1566807810034-cb2150a0abe9?w=400&q=80"
     });
     
@@ -121,16 +146,28 @@ async function seedDatabase() {
       height: "6'4\"",
       weight: 205,
       rasScore: "9.2",
+      fortyYard: "4.48",
+      benchPress: 20,
+      verticalJump: "42.5",
+      broadJump: 141,
+      coneDrill: "6.42",
+      shuttleRun: "3.85",
       imageUrl: "https://images.unsplash.com/photo-1566807810034-cb2150a0abe9?w=400&q=80"
     });
 
     const p3 = await storage.createPlayer({
-      name: "Drake Maye",
-      college: "UNC",
+      name: "Shedeur Sanders",
+      college: "Colorado",
       position: "QB",
-      height: "6'4\"",
-      weight: 230,
-      rasScore: "8.8",
+      height: "6'2\"",
+      weight: 215,
+      rasScore: "7.8",
+      fortyYard: "4.78",
+      benchPress: 26,
+      verticalJump: "34.2",
+      broadJump: 128,
+      coneDrill: "7.02",
+      shuttleRun: "4.28",
       imageUrl: "https://images.unsplash.com/photo-1566807810034-cb2150a0abe9?w=400&q=80"
     });
 

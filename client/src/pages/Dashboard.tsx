@@ -30,9 +30,9 @@ export default function Dashboard() {
         transition={{ duration: 0.5 }}
       >
         <header className="mb-10">
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-3">Market Overview</h1>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-3">2026 Draft Market Overview</h1>
           <p className="text-muted-foreground max-w-2xl">
-            Track real-time stock value of 2025 NFL Draft prospects based on expert mock drafts and sportsbook odds.
+            Track real-time stock value of 2026 NFL Draft prospects based on expert mock drafts and sportsbook odds.
           </p>
         </header>
 

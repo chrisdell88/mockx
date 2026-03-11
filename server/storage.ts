@@ -18,6 +18,7 @@ export interface IStorage {
   // Trends
   getPlayerAdpHistory(playerId: number): Promise<AdpHistory[]>;
   getPlayerOddsHistory(playerId: number): Promise<Odds[]>;
+  getPlayerRankings(playerId: number): Promise<Array<{ sourceName: string, pickNumber: number, publishedAt?: string }>>;
   
   // Mock Drafts
   getMockDrafts(): Promise<MockDraft[]>;
@@ -94,6 +95,24 @@ export class DatabaseStorage implements IStorage {
   async addAdpHistory(history: InsertAdpHistory): Promise<AdpHistory> {
     const [created] = await db.insert(adpHistory).values(history).returning();
     return created;
+  }
+
+  async getPlayerRankings(playerId: number): Promise<Array<{ sourceName: string, pickNumber: number, publishedAt?: string }>> {
+    const rankings = await db.select({
+      sourceName: mockDrafts.sourceName,
+      pickNumber: mockDraftPicks.pickNumber,
+      publishedAt: mockDrafts.publishedAt,
+    })
+    .from(mockDraftPicks)
+    .innerJoin(mockDrafts, eq(mockDraftPicks.mockDraftId, mockDrafts.id))
+    .where(eq(mockDraftPicks.playerId, playerId))
+    .orderBy(desc(mockDrafts.publishedAt));
+    
+    return rankings.map(r => ({
+      sourceName: r.sourceName,
+      pickNumber: r.pickNumber,
+      publishedAt: r.publishedAt ? r.publishedAt.toISOString() : undefined,
+    }));
   }
 }
 

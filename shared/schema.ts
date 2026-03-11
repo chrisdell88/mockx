@@ -1,18 +1,64 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+export const players = pgTable("players", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  college: text("college"),
+  position: text("position"),
+  height: text("height"),
+  weight: integer("weight"),
+  rasScore: numeric("ras_score"),
+  imageUrl: text("image_url"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const mockDrafts = pgTable("mock_drafts", {
+  id: serial("id").primaryKey(),
+  sourceName: text("source_name").notNull(),
+  url: text("url"),
+  publishedAt: timestamp("published_at").defaultNow(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export const mockDraftPicks = pgTable("mock_draft_picks", {
+  id: serial("id").primaryKey(),
+  mockDraftId: integer("mock_draft_id").notNull(),
+  playerId: integer("player_id").notNull(),
+  pickNumber: integer("pick_number").notNull(),
+});
+
+export const adpHistory = pgTable("adp_history", {
+  id: serial("id").primaryKey(),
+  playerId: integer("player_id").notNull(),
+  adpValue: numeric("adp_value").notNull(),
+  date: timestamp("date").defaultNow(),
+});
+
+export const odds = pgTable("odds", {
+  id: serial("id").primaryKey(),
+  playerId: integer("player_id").notNull(),
+  sportsbook: text("sportsbook").notNull(),
+  overUnder: numeric("over_under").notNull(),
+  date: timestamp("date").defaultNow(),
+});
+
+export const insertPlayerSchema = createInsertSchema(players).omit({ id: true });
+export const insertMockDraftSchema = createInsertSchema(mockDrafts).omit({ id: true, publishedAt: true });
+export const insertMockDraftPickSchema = createInsertSchema(mockDraftPicks).omit({ id: true });
+export const insertAdpHistorySchema = createInsertSchema(adpHistory).omit({ id: true, date: true });
+export const insertOddsSchema = createInsertSchema(odds).omit({ id: true, date: true });
+
+export type Player = typeof players.$inferSelect;
+export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
+
+export type MockDraft = typeof mockDrafts.$inferSelect;
+export type InsertMockDraft = z.infer<typeof insertMockDraftSchema>;
+
+export type MockDraftPick = typeof mockDraftPicks.$inferSelect;
+export type InsertMockDraftPick = z.infer<typeof insertMockDraftPickSchema>;
+
+export type AdpHistory = typeof adpHistory.$inferSelect;
+export type InsertAdpHistory = z.infer<typeof insertAdpHistorySchema>;
+
+export type Odds = typeof odds.$inferSelect;
+export type InsertOdds = z.infer<typeof insertOddsSchema>;

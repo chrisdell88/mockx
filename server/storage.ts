@@ -1,38 +1,100 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { 
+  players, mockDrafts, mockDraftPicks, adpHistory, odds,
+  type Player, type InsertPlayer,
+  type MockDraft, type InsertMockDraft,
+  type MockDraftPick, type InsertMockDraftPick,
+  type AdpHistory, type InsertAdpHistory,
+  type Odds, type InsertOdds
+} from "@shared/schema";
+import { eq, desc, asc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  // Players
+  getPlayers(): Promise<(Player & { currentAdp?: number, trend?: 'up' | 'down' | 'flat' })[]>;
+  getPlayer(id: number): Promise<Player | undefined>;
+  createPlayer(player: InsertPlayer): Promise<Player>;
+  
+  // Trends
+  getPlayerAdpHistory(playerId: number): Promise<AdpHistory[]>;
+  getPlayerOddsHistory(playerId: number): Promise<Odds[]>;
+  
+  // Mock Drafts
+  getMockDrafts(): Promise<MockDraft[]>;
+  createMockDraft(mockDraft: InsertMockDraft): Promise<MockDraft>;
+  createMockDraftPicks(picks: InsertMockDraftPick[]): Promise<MockDraftPick[]>;
+  addAdpHistory(history: InsertAdpHistory): Promise<AdpHistory>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getPlayers(): Promise<(Player & { currentAdp?: number, trend?: 'up' | 'down' | 'flat' })[]> {
+    const allPlayers = await db.select().from(players);
+    const enrichedPlayers = await Promise.all(allPlayers.map(async (player) => {
+      // Get recent ADP history to calculate trend
+      const history = await db.select()
+        .from(adpHistory)
+        .where(eq(adpHistory.playerId, player.id))
+        .orderBy(desc(adpHistory.date))
+        .limit(2);
+        
+      let currentAdp = undefined;
+      let trend: 'up' | 'down' | 'flat' = 'flat';
+      
+      if (history.length > 0) {
+        currentAdp = Number(history[0].adpValue);
+        if (history.length > 1) {
+          const prevAdp = Number(history[1].adpValue);
+          // Lower ADP is better (rising stock)
+          if (currentAdp < prevAdp) trend = 'up';
+          else if (currentAdp > prevAdp) trend = 'down';
+        }
+      }
+      
+      return {
+        ...player,
+        currentAdp,
+        trend
+      };
+    }));
+    
+    return enrichedPlayers;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getPlayer(id: number): Promise<Player | undefined> {
+    const [player] = await db.select().from(players).where(eq(players.id, id));
+    return player;
+  }
+  
+  async createPlayer(player: InsertPlayer): Promise<Player> {
+    const [created] = await db.insert(players).values(player).returning();
+    return created;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getPlayerAdpHistory(playerId: number): Promise<AdpHistory[]> {
+    return await db.select().from(adpHistory).where(eq(adpHistory.playerId, playerId)).orderBy(asc(adpHistory.date));
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getPlayerOddsHistory(playerId: number): Promise<Odds[]> {
+    return await db.select().from(odds).where(eq(odds.playerId, playerId)).orderBy(asc(odds.date));
+  }
+
+  async getMockDrafts(): Promise<MockDraft[]> {
+    return await db.select().from(mockDrafts).orderBy(desc(mockDrafts.publishedAt));
+  }
+
+  async createMockDraft(mockDraft: InsertMockDraft): Promise<MockDraft> {
+    const [created] = await db.insert(mockDrafts).values(mockDraft).returning();
+    return created;
+  }
+
+  async createMockDraftPicks(picks: InsertMockDraftPick[]): Promise<MockDraftPick[]> {
+    return await db.insert(mockDraftPicks).values(picks).returning();
+  }
+
+  async addAdpHistory(history: InsertAdpHistory): Promise<AdpHistory> {
+    const [created] = await db.insert(adpHistory).values(history).returning();
+    return created;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

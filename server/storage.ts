@@ -10,28 +10,26 @@ import {
 import { eq, desc, asc } from "drizzle-orm";
 
 export interface IStorage {
-  // Players
   getPlayers(): Promise<(Player & { currentAdp?: number, trend?: 'up' | 'down' | 'flat' })[]>;
   getPlayer(id: number): Promise<Player | undefined>;
   createPlayer(player: InsertPlayer): Promise<Player>;
   
-  // Trends
   getPlayerAdpHistory(playerId: number): Promise<AdpHistory[]>;
   getPlayerOddsHistory(playerId: number): Promise<Odds[]>;
   getPlayerRankings(playerId: number): Promise<Array<{ sourceName: string, pickNumber: number, publishedAt?: string }>>;
   
-  // Mock Drafts
   getMockDrafts(): Promise<MockDraft[]>;
   createMockDraft(mockDraft: InsertMockDraft): Promise<MockDraft>;
+  createMockDraftPick(pick: InsertMockDraftPick): Promise<MockDraftPick>;
   createMockDraftPicks(picks: InsertMockDraftPick[]): Promise<MockDraftPick[]>;
   addAdpHistory(history: InsertAdpHistory): Promise<AdpHistory>;
+  addOddsHistory(entry: InsertOdds): Promise<Odds>;
 }
 
 export class DatabaseStorage implements IStorage {
   async getPlayers(): Promise<(Player & { currentAdp?: number, trend?: 'up' | 'down' | 'flat' })[]> {
     const allPlayers = await db.select().from(players);
     const enrichedPlayers = await Promise.all(allPlayers.map(async (player) => {
-      // Get recent ADP history to calculate trend
       const history = await db.select()
         .from(adpHistory)
         .where(eq(adpHistory.playerId, player.id))
@@ -45,17 +43,12 @@ export class DatabaseStorage implements IStorage {
         currentAdp = Number(history[0].adpValue);
         if (history.length > 1) {
           const prevAdp = Number(history[1].adpValue);
-          // Lower ADP is better (rising stock)
           if (currentAdp < prevAdp) trend = 'up';
           else if (currentAdp > prevAdp) trend = 'down';
         }
       }
       
-      return {
-        ...player,
-        currentAdp,
-        trend
-      };
+      return { ...player, currentAdp, trend };
     }));
     
     return enrichedPlayers;
@@ -88,12 +81,22 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async createMockDraftPick(pick: InsertMockDraftPick): Promise<MockDraftPick> {
+    const [created] = await db.insert(mockDraftPicks).values(pick).returning();
+    return created;
+  }
+
   async createMockDraftPicks(picks: InsertMockDraftPick[]): Promise<MockDraftPick[]> {
     return await db.insert(mockDraftPicks).values(picks).returning();
   }
 
   async addAdpHistory(history: InsertAdpHistory): Promise<AdpHistory> {
-    const [created] = await db.insert(adpHistory).values(history).returning();
+    const [created] = await db.insert(adpHistory).values(history as any).returning();
+    return created;
+  }
+
+  async addOddsHistory(entry: InsertOdds): Promise<Odds> {
+    const [created] = await db.insert(odds).values(entry as any).returning();
     return created;
   }
 

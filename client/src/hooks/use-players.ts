@@ -71,3 +71,18 @@ export function usePlayerTrends(id: number) {
     enabled: !!id,
   });
 }
+
+export function usePlayerRankings(id: number) {
+  return useQuery({
+    queryKey: [api.players.rankings.path, id],
+    queryFn: async () => {
+      const url = buildUrl(api.players.rankings.path, { id });
+      const res = await fetch(url, { credentials: "include" });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to fetch player rankings");
+      const data = await res.json();
+      return data as Array<{ sourceName: string; pickNumber: number; publishedAt?: string }>;
+    },
+    enabled: !!id,
+  });
+}

@@ -43,16 +43,21 @@ export const adpHistory = pgTable("adp_history", {
 export const odds = pgTable("odds", {
   id: serial("id").primaryKey(),
   playerId: integer("player_id").notNull(),
-  sportsbook: text("sportsbook").notNull(),
-  overUnder: numeric("over_under").notNull(),
+  bookmaker: text("bookmaker").notNull(),
+  marketType: text("market_type").notNull(),
+  odds: text("odds").notNull(),
   date: timestamp("date").defaultNow(),
 });
 
 export const insertPlayerSchema = createInsertSchema(players).omit({ id: true });
 export const insertMockDraftSchema = createInsertSchema(mockDrafts).omit({ id: true, publishedAt: true });
 export const insertMockDraftPickSchema = createInsertSchema(mockDraftPicks).omit({ id: true });
-export const insertAdpHistorySchema = createInsertSchema(adpHistory).omit({ id: true, date: true });
-export const insertOddsSchema = createInsertSchema(odds).omit({ id: true, date: true });
+export const insertAdpHistorySchema = createInsertSchema(adpHistory).omit({ id: true }).extend({
+  date: z.date().optional(),
+});
+export const insertOddsSchema = createInsertSchema(odds).omit({ id: true }).extend({
+  date: z.date().optional(),
+});
 
 export type Player = typeof players.$inferSelect;
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;

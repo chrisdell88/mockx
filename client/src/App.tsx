@@ -9,7 +9,9 @@ import Dashboard from "./pages/Dashboard";
 import Players from "./pages/Players";
 import PlayerDetail from "./pages/PlayerDetail";
 import MockDrafts from "./pages/MockDrafts";
+import Sources from "./pages/Sources";
 import NotFound from "@/pages/not-found";
+import Layout from "@/components/Layout";
 
 function Router() {
   return (
@@ -18,6 +20,9 @@ function Router() {
       <Route path="/players" component={Players} />
       <Route path="/players/:id" component={PlayerDetail} />
       <Route path="/mock-drafts" component={MockDrafts} />
+      <Route path="/sources">
+        {() => <Layout><Sources /></Layout>}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

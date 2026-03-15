@@ -24,17 +24,20 @@ export const analysts = pgTable("analysts", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   outlet: text("outlet").notNull(),
-  huddleScore2025: integer("huddle_score_2025"),      // Huddle Report 2025 season score (max ~60)
-  huddleScore5Year: numeric("huddle_score_5_year"),   // 5-year average score
-  accuracyWeight: numeric("accuracy_weight"),          // Normalized 0-1 weight for consensus calcs
-  isConsensus: integer("is_consensus").default(0),    // 1 if this is an aggregated consensus source
+  huddleScore2025: integer("huddle_score_2025"),
+  huddleScore5Year: numeric("huddle_score_5_year"),
+  accuracyWeight: numeric("accuracy_weight"),
+  isConsensus: integer("is_consensus").default(0),
+  sourceKey: text("source_key"),   // machine key, e.g. "walterfootball_charlie"
+  scrapeUrl: text("scrape_url"),   // URL to scrape for auto-updates
   notes: text("notes"),
 });
 
 export const mockDrafts = pgTable("mock_drafts", {
   id: serial("id").primaryKey(),
   sourceName: text("source_name").notNull(),
-  analystId: integer("analyst_id"),                   // FK to analysts table
+  sourceKey: text("source_key"),   // links to analysts.sourceKey / scrapeJobs.sourceKey
+  analystId: integer("analyst_id"),
   url: text("url"),
   publishedAt: timestamp("published_at").defaultNow(),
 });
@@ -62,15 +65,29 @@ export const odds = pgTable("odds", {
   date: timestamp("date").defaultNow(),
 });
 
+// Tracks automated scraping runs per source
+export const scrapeJobs = pgTable("scrape_jobs", {
+  id: serial("id").primaryKey(),
+  sourceKey: text("source_key").notNull().unique(),
+  lastRunAt: timestamp("last_run_at"),
+  status: text("status").default("pending"),  // 'pending'|'running'|'success'|'error'
+  picksFound: integer("picks_found"),
+  errorMessage: text("error_message"),
+  notes: text("notes"),
+});
+
 export const insertPlayerSchema = createInsertSchema(players).omit({ id: true });
 export const insertAnalystSchema = createInsertSchema(analysts).omit({ id: true }).extend({
   huddleScore5Year: z.number().optional(),
   accuracyWeight: z.number().optional(),
   isConsensus: z.number().optional(),
+  sourceKey: z.string().optional(),
+  scrapeUrl: z.string().optional(),
   notes: z.string().optional(),
 });
 export const insertMockDraftSchema = createInsertSchema(mockDrafts).omit({ id: true, publishedAt: true }).extend({
   analystId: z.number().optional(),
+  sourceKey: z.string().optional(),
 });
 export const insertMockDraftPickSchema = createInsertSchema(mockDraftPicks).omit({ id: true });
 export const insertAdpHistorySchema = createInsertSchema(adpHistory).omit({ id: true }).extend({
@@ -78,6 +95,10 @@ export const insertAdpHistorySchema = createInsertSchema(adpHistory).omit({ id: 
 });
 export const insertOddsSchema = createInsertSchema(odds).omit({ id: true }).extend({
   date: z.date().optional(),
+});
+export const insertScrapeJobSchema = createInsertSchema(scrapeJobs).omit({ id: true }).extend({
+  lastRunAt: z.date().optional(),
+  picksFound: z.number().optional(),
 });
 
 export type Player = typeof players.$inferSelect;
@@ -97,3 +118,6 @@ export type InsertAdpHistory = z.infer<typeof insertAdpHistorySchema>;
 
 export type Odds = typeof odds.$inferSelect;
 export type InsertOdds = z.infer<typeof insertOddsSchema>;
+
+export type ScrapeJob = typeof scrapeJobs.$inferSelect;
+export type InsertScrapeJob = z.infer<typeof insertScrapeJobSchema>;

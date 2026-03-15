@@ -4,7 +4,8 @@ import {
   mockDrafts, 
   odds,
   adpHistory,
-  analysts
+  analysts,
+  scrapeJobs,
 } from './schema';
 
 export const errorSchemas = {
@@ -19,7 +20,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/players' as const,
       responses: {
-        200: z.array(z.custom<typeof players.$inferSelect & { currentAdp?: number, trend?: 'up' | 'down' | 'flat' }>()),
+        200: z.array(z.custom<typeof players.$inferSelect & { currentAdp?: number, trend?: 'up' | 'down' | 'flat', adpChange?: number }>()),
       },
     },
     get: {
@@ -80,7 +81,40 @@ export const api = {
         400: errorSchemas.validation,
       },
     }
-  }
+  },
+  scrape: {
+    status: {
+      method: 'GET' as const,
+      path: '/api/scrape/status' as const,
+      responses: {
+        200: z.object({
+          jobs: z.array(z.custom<typeof scrapeJobs.$inferSelect>()),
+          scrapers: z.array(z.object({
+            sourceKey: z.string(),
+            displayName: z.string(),
+            job: z.custom<typeof scrapeJobs.$inferSelect>().nullable(),
+          })),
+          totalSources: z.number(),
+          scrapableSources: z.number(),
+        }),
+      },
+    },
+    runAll: {
+      method: 'POST' as const,
+      path: '/api/scrape' as const,
+      responses: {
+        200: z.object({ message: z.string(), results: z.array(z.any()) }),
+      },
+    },
+    runOne: {
+      method: 'POST' as const,
+      path: '/api/scrape/:sourceKey' as const,
+      responses: {
+        200: z.object({ message: z.string(), result: z.any() }),
+        422: z.object({ message: z.string(), result: z.any() }),
+      },
+    },
+  },
 };
 
 export function buildUrl(path: string, params?: Record<string, string | number>): string {

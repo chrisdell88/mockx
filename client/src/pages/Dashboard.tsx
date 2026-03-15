@@ -1,12 +1,15 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "wouter";
 import Layout from "@/components/Layout";
 import { usePlayers } from "@/hooks/use-players";
 import { useQuery } from "@tanstack/react-query";
 import { PlayerCard } from "@/components/PlayerCard";
+import { format } from "date-fns";
 import {
   Activity, Loader2, TrendingUp, TrendingDown, ArrowRight,
-  Users, Wifi, RefreshCw, BarChart3, Zap, Clock, DollarSign,
+  Users, Wifi, BarChart3, Zap, Clock, DollarSign,
+  Bell, X, ExternalLink, AlertTriangle, CheckCircle2,
+  Minus, ChevronRight, Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRef, useState } from "react";
@@ -28,6 +31,17 @@ type OddsMover = {
   bookmaker: string; marketType: string;
   currentOdds: string; prevOdds: string;
   currentProb: number; prevProb: number; change: number;
+};
+
+type DiscrepancyRow = {
+  playerId: number; playerName: string; position: string | null;
+  currentAdp: number; impliedPick: number; discrepancy: number;
+  signal: "bullish" | "bearish" | "neutral"; oddsMarkets: string[];
+};
+
+type ActivityItem = {
+  id: number; sourceName: string; shortName: string | null;
+  boardType: string | null; publishedAt: string | null; url: string | null;
 };
 
 type Window = "3d" | "7d" | "30d";
@@ -190,6 +204,162 @@ function PositionSummary({ players }: { players: NonNullable<ReturnType<typeof u
   );
 }
 
+// ─── Discrepancy Card ─────────────────────────────────────────────────────────
+function DiscrepancyCard({ row, rank }: { row: DiscrepancyRow; rank: number }) {
+  const bullish = row.signal === "bullish";
+  const bearish = row.signal === "bearish";
+  return (
+    <Link href={`/players/${row.playerId}`}>
+      <div
+        className={cn(
+          "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer group",
+          bullish ? "bg-stock-up/5 border-stock-up/20 hover:bg-stock-up/10" :
+          bearish ? "bg-stock-down/5 border-stock-down/20 hover:bg-stock-down/10" :
+                    "bg-white/3 border-white/5 hover:bg-white/6"
+        )}
+        data-testid={`discrepancy-card-${row.playerId}`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className={cn(
+            "w-5 h-5 rounded text-[9px] font-bold font-mono flex items-center justify-center shrink-0",
+            bullish ? "bg-stock-up/15 text-stock-up" : bearish ? "bg-stock-down/15 text-stock-down" : "bg-white/10 text-muted-foreground"
+          )}>
+            {rank}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white group-hover:text-primary transition-colors truncate leading-tight">
+              {row.playerName}
+            </p>
+            <p className="text-[10px] text-muted-foreground font-mono">{row.position}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0 ml-2">
+          {/* ADP vs implied */}
+          <div className="text-right">
+            <div className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground justify-end">
+              <span>ADP <span className="text-white font-bold">#{row.currentAdp.toFixed(1)}</span></span>
+              <span className="opacity-40">·</span>
+              <span>Implied <span className={cn("font-bold", bullish ? "text-stock-up" : bearish ? "text-stock-down" : "text-white")}>#{row.impliedPick.toFixed(1)}</span></span>
+            </div>
+            <p className={cn(
+              "text-xs font-mono font-bold text-right mt-0.5",
+              bullish ? "text-stock-up" : bearish ? "text-stock-down" : "text-muted-foreground"
+            )}>
+              {bullish ? "+" : ""}{row.discrepancy.toFixed(1)} spot gap
+            </p>
+          </div>
+
+          {/* Signal icon */}
+          {bullish && <CheckCircle2 className="w-4 h-4 text-stock-up shrink-0" />}
+          {bearish && <AlertTriangle className="w-4 h-4 text-stock-down shrink-0" />}
+          {!bullish && !bearish && <Minus className="w-4 h-4 text-muted-foreground/40 shrink-0" />}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ─── Activity Drawer ──────────────────────────────────────────────────────────
+function ActivityDrawer({ open, onClose, items, loading }: {
+  open: boolean; onClose: () => void;
+  items: ActivityItem[]; loading: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          {/* Panel */}
+          <motion.div
+            initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="fixed right-0 top-0 h-full w-full max-w-sm bg-[hsl(var(--card))] border-l border-white/10 z-50 flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+              <div>
+                <h3 className="text-base font-display font-semibold text-white flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-primary" />Activity Feed
+                </h3>
+                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                  Recently scraped mocks &amp; big boards
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                data-testid="btn-close-activity"
+                className="p-2 rounded-lg hover:bg-white/10 transition-colors text-muted-foreground hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+              {loading ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                </div>
+              ) : items.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <Activity className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                  <p className="text-sm font-mono">No recent activity</p>
+                </div>
+              ) : items.map(item => {
+                const isMock = item.boardType === "mock";
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between p-3 rounded-xl bg-white/3 border border-white/5 hover:bg-white/6 transition-colors"
+                    data-testid={`activity-item-${item.id}`}
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <span className={cn(
+                        "text-[9px] font-bold font-mono px-1.5 py-0.5 rounded shrink-0 mt-0.5",
+                        isMock ? "bg-primary/20 text-primary" : "bg-violet-500/20 text-violet-400"
+                      )}>
+                        {isMock ? "MOCK" : "BB"}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate leading-tight">{item.sourceName}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {item.shortName && <span className="mr-1.5 text-white/60">{item.shortName}</span>}
+                          {item.publishedAt ? format(new Date(item.publishedAt), "MMM d, yyyy") : "Unknown date"}
+                        </p>
+                      </div>
+                    </div>
+                    {item.url && (
+                      <a href={item.url} target="_blank" rel="noreferrer"
+                        className="text-muted-foreground hover:text-primary transition-colors shrink-0 ml-2 mt-0.5">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-3 border-t border-white/10 shrink-0">
+              <Link href="/mock-drafts">
+                <div className="flex items-center justify-center gap-2 text-xs text-primary font-mono hover:underline cursor-pointer" onClick={onClose}>
+                  View Full Matrix <ChevronRight className="w-3 h-3" />
+                </div>
+              </Link>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ─── Source Coverage Bar ──────────────────────────────────────────────────────
 function SourceCoverage({ analysts }: { analysts: Analyst[] }) {
   const total = analysts.length;
@@ -225,6 +395,12 @@ export default function Dashboard() {
   const { data: analysts = [] } = useQuery<Analyst[]>({ queryKey: ["/api/analysts"] });
   const { data: windowData = [], isLoading: windowLoading } = useQuery<AdpWindowPlayer[]>({ queryKey: ["/api/adp-windows"] });
   const { data: oddsMovers = [], isLoading: oddsLoading } = useQuery<OddsMover[]>({ queryKey: ["/api/odds/movers"] });
+  const { data: discrepancy = [], isLoading: discrepancyLoading } = useQuery<DiscrepancyRow[]>({ queryKey: ["/api/discrepancy"] });
+  const [activityOpen, setActivityOpen] = useState(false);
+  const { data: activityItems = [], isLoading: activityLoading } = useQuery<ActivityItem[]>({
+    queryKey: ["/api/activity"],
+    enabled: activityOpen,
+  });
 
   const [activeWindow, setActiveWindow] = useState<Window>("7d");
 
@@ -245,6 +421,9 @@ export default function Dashboard() {
 
   const oddsGainers = oddsMovers.filter(o => o.change > 0);
   const oddsDroppers = oddsMovers.filter(o => o.change < 0);
+
+  const bullishSignals = discrepancy.filter(r => r.signal === "bullish").slice(0, 5);
+  const bearishSignals = discrepancy.filter(r => r.signal === "bearish").slice(0, 5);
 
   if (isLoading) {
     return (
@@ -415,6 +594,65 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* ── ADP vs Odds Signals ───────────────────────────────────────── */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-display font-semibold text-white flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-primary" />
+                ADP vs Odds Signals
+              </h2>
+              {discrepancyLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+            </div>
+            <p className="text-[10px] text-muted-foreground font-mono hidden sm:block">
+              Sportsbook implied pick vs analyst consensus ADP
+            </p>
+          </div>
+
+          {!discrepancyLoading && discrepancy.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Bullish: odds say they go earlier than ADP */}
+              <section className="glass-card p-5 rounded-2xl border-l-4 border-l-[hsl(var(--stock-up))]">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-stock-up" />Bullish — Odds Beat ADP
+                  </h3>
+                  <span className="text-[9px] uppercase tracking-widest text-stock-up font-mono bg-stock-up/10 px-2 py-0.5 rounded-full">
+                    Market favors earlier
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {bullishSignals.length > 0
+                    ? bullishSignals.map((row, i) => <DiscrepancyCard key={row.playerId} row={row} rank={i + 1} />)
+                    : <p className="text-sm text-muted-foreground text-center py-4 font-mono">No bullish signals</p>}
+                </div>
+              </section>
+
+              {/* Bearish: odds say they go later than ADP */}
+              <section className="glass-card p-5 rounded-2xl border-l-4 border-l-[hsl(var(--stock-down))]">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-stock-down" />Bearish — ADP Beats Odds
+                  </h3>
+                  <span className="text-[9px] uppercase tracking-widest text-stock-down font-mono bg-stock-down/10 px-2 py-0.5 rounded-full">
+                    Market favors later
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {bearishSignals.length > 0
+                    ? bearishSignals.map((row, i) => <DiscrepancyCard key={row.playerId} row={row} rank={i + 1} />)
+                    : <p className="text-sm text-muted-foreground text-center py-4 font-mono">No bearish signals</p>}
+                </div>
+              </section>
+            </div>
+          ) : !discrepancyLoading ? (
+            <div className="glass-card rounded-2xl p-8 text-center text-muted-foreground border border-white/5">
+              <Gauge className="w-8 h-8 mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-mono">No odds data available — signals generate once sportsbook odds are seeded</p>
+            </div>
+          ) : null}
+        </div>
+
         {/* ── Position Breakdown + Source Coverage ───────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-3">
@@ -453,6 +691,29 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
+
+      {/* ── Floating Activity Feed Button ─────────────────────────────── */}
+      <button
+        onClick={() => setActivityOpen(true)}
+        data-testid="btn-activity-feed"
+        className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-3 bg-primary text-black rounded-full shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all font-semibold text-sm hover:scale-105"
+      >
+        <Bell className="w-4 h-4" />
+        <span className="hidden sm:inline">Activity</span>
+        {activityItems.length > 0 && (
+          <span className="flex h-5 w-5 items-center justify-center bg-black/20 rounded-full text-[10px] font-bold">
+            {activityItems.length}
+          </span>
+        )}
+      </button>
+
+      {/* ── Activity Drawer ───────────────────────────────────────────── */}
+      <ActivityDrawer
+        open={activityOpen}
+        onClose={() => setActivityOpen(false)}
+        items={activityItems}
+        loading={activityLoading}
+      />
     </Layout>
   );
 }

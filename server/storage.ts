@@ -38,6 +38,13 @@ export interface IStorage {
   
   getScrapeJobs(): Promise<ScrapeJob[]>;
   upsertScrapeJob(job: Partial<InsertScrapeJob> & { sourceKey: string }): Promise<ScrapeJob>;
+
+  getDiscrepancy(): Promise<Array<{
+    playerId: number; playerName: string; position: string | null;
+    currentAdp: number; impliedPick: number; discrepancy: number;
+    signal: "bullish" | "bearish" | "neutral"; oddsMarkets: string[];
+  }>>;
+  getRecentActivity(limit?: number): Promise<MockDraft[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -331,6 +338,78 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { players: allPlayers, drafts: allDrafts, analysts: allAnalysts, picks: picksMatrix };
+  }
+
+  async getDiscrepancy(): Promise<Array<{
+    playerId: number; playerName: string; position: string | null;
+    currentAdp: number; impliedPick: number; discrepancy: number;
+    signal: "bullish" | "bearish" | "neutral"; oddsMarkets: string[];
+  }>> {
+    const allPlayers = await this.getPlayers();
+    const allOdds = await db.select().from(odds).orderBy(desc(odds.date));
+
+    // latest odds per player per market type
+    const playerMarket = new Map<string, string>(); // "playerId_market" → odds string
+    for (const o of allOdds) {
+      const key = `${o.playerId}_${o.marketType}`;
+      if (!playerMarket.has(key)) playerMarket.set(key, o.odds);
+    }
+
+    const amToProb = (s: string): number => {
+      const n = parseInt(s, 10);
+      if (isNaN(n)) return 0;
+      return n < 0 ? -n / (-n + 100) : 100 / (n + 100);
+    };
+
+    const results: Array<{
+      playerId: number; playerName: string; position: string | null;
+      currentAdp: number; impliedPick: number; discrepancy: number;
+      signal: "bullish" | "bearish" | "neutral"; oddsMarkets: string[];
+    }> = [];
+
+    for (const player of allPlayers) {
+      if (!player.currentAdp) continue;
+      const pid = player.id;
+      const markets = ["first_overall","top_3_pick","top_5_pick","top_10_pick","first_round"];
+      const hasAny = markets.some(m => playerMarket.has(`${pid}_${m}`));
+      if (!hasAny) continue;
+
+      // Hierarchical probability — each lower market inherits from higher
+      const p1   = amToProb(playerMarket.get(`${pid}_first_overall`) ?? "+100000");
+      const p3   = Math.max(p1, amToProb(playerMarket.get(`${pid}_top_3_pick`)   ?? "+100000"));
+      const p5   = Math.max(p3, amToProb(playerMarket.get(`${pid}_top_5_pick`)   ?? "+100000"));
+      const p10  = Math.max(p5, amToProb(playerMarket.get(`${pid}_top_10_pick`)  ?? "+100000"));
+      const p1st = Math.max(p10, amToProb(playerMarket.get(`${pid}_first_round`) ?? "+100000"));
+
+      // Weighted expected pick: probability mass across bands
+      const impliedPick =
+        p1 * 1 +
+        (p3  - p1)  * 2.5 +
+        (p5  - p3)  * 4   +
+        (p10 - p5)  * 8   +
+        (p1st - p10) * 18 +
+        (1 - p1st)  * 35;
+
+      const discrepancy = Math.round((player.currentAdp - impliedPick) * 10) / 10;
+      const signal: "bullish" | "bearish" | "neutral" =
+        discrepancy > 1.5 ? "bullish" :
+        discrepancy < -1.5 ? "bearish" : "neutral";
+
+      results.push({
+        playerId: pid, playerName: player.name, position: player.position,
+        currentAdp: player.currentAdp,
+        impliedPick: Math.round(impliedPick * 10) / 10,
+        discrepancy,
+        signal,
+        oddsMarkets: markets.filter(m => playerMarket.has(`${pid}_${m}`)),
+      });
+    }
+
+    return results.sort((a, b) => Math.abs(b.discrepancy) - Math.abs(a.discrepancy));
+  }
+
+  async getRecentActivity(limit = 30): Promise<MockDraft[]> {
+    return db.select().from(mockDrafts).orderBy(desc(mockDrafts.publishedAt)).limit(limit);
   }
 
   async upsertScrapeJob(job: Partial<InsertScrapeJob> & { sourceKey: string }): Promise<ScrapeJob> {

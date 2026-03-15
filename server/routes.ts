@@ -240,6 +240,27 @@ export async function registerRoutes(
     }
   });
 
+  // ─── ADP vs Odds Discrepancy (Betting Signal) ────────────────────────────
+  app.get("/api/discrepancy", async (req, res) => {
+    try {
+      const data = await storage.getDiscrepancy();
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ─── Activity Feed: Recent mocks/boards added ─────────────────────────────
+  app.get("/api/activity", async (req, res) => {
+    try {
+      const limit = parseInt((req.query.limit as string) ?? "30");
+      const recent = await storage.getRecentActivity(isNaN(limit) ? 30 : limit);
+      res.json(recent);
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ─── Seed + Enhance ─────────────────────────────────────────────────────
   seedDatabase().catch(console.error);
   ensureEnhancedData().catch(console.error);

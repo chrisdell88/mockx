@@ -5,11 +5,13 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Loader2, TrendingUp, TrendingDown, Minus, ExternalLink,
-  ArrowUpDown, BarChart3, Eye, EyeOff, RefreshCw,
+  ArrowUpDown, BarChart3, Eye, EyeOff, RefreshCw, Activity, Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
+type BoardView = "mock" | "bigboard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PlayerRow = {
@@ -96,8 +98,11 @@ const LEGEND = [
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function MockDrafts() {
+  const [boardView, setBoardView] = useState<BoardView>("mock");
+
   const { data, isLoading, refetch, isFetching } = useQuery<MatrixData>({
-    queryKey: ["/api/matrix"],
+    queryKey: ["/api/matrix", boardView],
+    queryFn: () => fetch(`/api/matrix?boardType=${boardView}`).then(r => r.json()),
   });
 
   const [sortBy, setSortBy] = useState<"adp" | "name" | "pos">("adp");
@@ -161,14 +166,54 @@ export default function MockDrafts() {
   return (
     <Layout>
       <div className="space-y-6">
+
+        {/* ── Board Type Toggle ── */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-black/40 border border-white/10 rounded-xl p-1 gap-1">
+            <button
+              onClick={() => { setBoardView("mock"); setFilterPos("all"); }}
+              data-testid="tab-mock-drafts"
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
+                boardView === "mock"
+                  ? "bg-primary text-black shadow-md"
+                  : "text-muted-foreground hover:text-white"
+              )}
+            >
+              <Activity className="w-4 h-4" />
+              Mock Drafts
+            </button>
+            <button
+              onClick={() => { setBoardView("bigboard"); setFilterPos("all"); }}
+              data-testid="tab-big-boards"
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
+                boardView === "bigboard"
+                  ? "bg-violet-600 text-white shadow-md"
+                  : "text-muted-foreground hover:text-white"
+              )}
+            >
+              <Award className="w-4 h-4" />
+              Big Boards
+            </button>
+          </div>
+          <div className="text-xs font-mono text-muted-foreground">
+            {boardView === "mock"
+              ? "Team-specific mock drafts — who goes where"
+              : "Talent rankings — best players regardless of team fit"}
+          </div>
+        </div>
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold text-white tracking-tight">
-              Draft Board <span className="text-primary">Matrix</span>
+              {boardView === "mock"
+                ? <>Mock Draft <span className="text-primary">Matrix</span></>
+                : <>Big Board <span className="text-violet-400">Matrix</span></>}
             </h1>
             <p className="text-muted-foreground text-sm mt-1 font-mono">
-              {sortedPlayers.length} prospects · {totalMocks} mock drafts · color-coded pick slots
+              {sortedPlayers.length} prospects · {totalMocks} {boardView === "mock" ? "mock drafts" : "big boards"} · color-coded pick slots
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -368,10 +413,10 @@ export default function MockDrafts() {
           </table>
         </div>
 
-        {/* Mock Draft List (compact) */}
+        {/* Source List */}
         <div>
           <h2 className="text-xs uppercase tracking-widest text-muted-foreground font-mono mb-3">
-            Sources ({sortedDrafts.length} mock drafts)
+            {boardView === "mock" ? `Sources (${sortedDrafts.length} mock drafts)` : `Big Boards (${sortedDrafts.length} boards)`}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {sortedDrafts.map(draft => (

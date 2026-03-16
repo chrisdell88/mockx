@@ -65,6 +65,7 @@ function formatBookmaker(key: string): string {
 }
 
 function priceToAmerican(price: number): string {
+  if (!price || price <= 1 || !isFinite(price)) return "+100000";
   if (price >= 2.0) {
     return `+${Math.round((price - 1) * 100)}`;
   } else {
@@ -112,6 +113,7 @@ export async function scrapeOdds(): Promise<{
         "americanfootball_nfl_draft_winner",
         "americanfootball_nfl_draft",
         "americanfootball_nfl_draft_number1",
+        "americanfootball_nfl_draft_first_pick",
       ];
       for (const key of possibleKeys) {
         draftSports.push({
@@ -123,6 +125,7 @@ export async function scrapeOdds(): Promise<{
           has_outrights: true,
         });
       }
+      console.log(`[ODDS] No dedicated draft sport found in API. Trying ${possibleKeys.length} known draft sport keys...`);
     }
 
     const allPlayers = await storage.getPlayers();

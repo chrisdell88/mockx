@@ -424,18 +424,20 @@ export class DatabaseStorage implements IStorage {
       } else {
         const probs: Array<{ pick: number; prob: number }> = [];
         for (const [mkt, oddsStr] of pm.entries()) {
-          const pickMatch = mkt.match(/pick_?(\d+)$/);
+          const pickMatch = mkt.match(/(?:pick|number|#|no)_?(\d+)$/i);
           if (pickMatch) {
             probs.push({ pick: parseInt(pickMatch[1]), prob: amToProb(oddsStr) });
           }
         }
         if (probs.length > 0) {
-          let totalProb = 0, weightedSum = 0;
+          let modeledProb = 0, weightedSum = 0;
           for (const { pick, prob } of probs) {
             weightedSum += pick * prob;
-            totalProb += prob;
+            modeledProb += prob;
           }
-          impliedPick = totalProb > 0 ? weightedSum / totalProb : 32;
+          const unmodeledProb = Math.max(0, 1 - modeledProb);
+          const tailPick = 40;
+          impliedPick = weightedSum + unmodeledProb * tailPick;
         } else {
           continue;
         }
@@ -486,8 +488,24 @@ export class DatabaseStorage implements IStorage {
     const analystMap = new Map(allAnalysts.map(a => [a.id, a]));
     const draftMap = new Map(allDrafts.map(d => [d.id, d]));
 
+    const latestDraftPerSource = new Map<string, number>();
+    const sortedDrafts = [...allDrafts].sort((a, b) => {
+      const da = a.publishedAt ? a.publishedAt.getTime() : 0;
+      const db2 = b.publishedAt ? b.publishedAt.getTime() : 0;
+      return db2 - da;
+    });
+    for (const d of sortedDrafts) {
+      const key = d.sourceKey ?? `analyst_${d.analystId ?? d.id}`;
+      if (!latestDraftPerSource.has(key)) {
+        latestDraftPerSource.set(key, d.id);
+      }
+    }
+    const latestDraftIds = new Set(latestDraftPerSource.values());
+
     const picksByPlayer = new Map<number, Array<{ pickNumber: number; weight: number }>>();
     for (const pick of allPicks) {
+      if (!latestDraftIds.has(pick.mockDraftId)) continue;
+
       if (!picksByPlayer.has(pick.playerId)) picksByPlayer.set(pick.playerId, []);
       const draft = draftMap.get(pick.mockDraftId);
       let weight = 1.0;

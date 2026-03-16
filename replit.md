@@ -7,14 +7,15 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 - **Frontend**: React + Vite, Wouter routing, TanStack Query, Recharts, Framer Motion, Shadcn/UI
 - **Backend**: Express + TypeScript, Drizzle ORM, PostgreSQL
 - **Scrapers**: Cheerio + Axios for HTML scraping; node-cron for daily automation (6am ET)
+- **Odds**: The Odds API integration (theoddsapi.com) — ODDS_API_KEY secret required
 
 ## Database Schema (`shared/schema.ts`)
 - `players` — 140 tracked prospects (auto-grows as scrapers find new players) with combine data + `imageUrl` for headshots
 - `analysts` — 43 sources with accuracy weights and `sourceKey` identifiers
 - `mockDrafts` — 15+ mock drafts (mocks + big boards)
 - `mockDraftPicks` — 523+ individual player picks per mock (rounds 1-3 coverage)
-- `adpHistory` — 4 ADP snapshots (Jan 29, Feb 20, Mar 8, Mar 15) for each player
-- `odds` — sportsbook odds history (DraftKings, FanDuel, BetMGM, Caesars)
+- `adpHistory` — Historical ADP + auto-synthesized consensus ADP from all mock picks (all 140 players covered)
+- `odds` — sportsbook odds history (DraftKings, FanDuel, BetMGM, Caesars + more via The Odds API)
 - `scrapeJobs` — tracks auto-scraper status per source (14 active scrapers)
 
 ## Key Routes
@@ -24,9 +25,32 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 - `GET /api/analysts` — all 43 analysts sorted by accuracy weight
 - `GET /api/mock-drafts` — all mock drafts
 - `GET /api/scrape/status` — scrape job status + scraper registry (14 scrapers)
-- `POST /api/scrape` — run all auto-scrapers now
+- `POST /api/scrape` — run all auto-scrapers + ADP synthesis
 - `POST /api/scrape/headshots` — scrape NFL.com articles for headshots only
+- `POST /api/scrape/odds` — pull real-time sportsbook odds via The Odds API
+- `POST /api/synthesize-adp` — recompute consensus ADP from latest mock picks
+- `POST /api/scrape/clear-placeholder-odds` — remove seeded placeholder odds
 - `POST /api/scrape/:sourceKey` — run specific scraper
+
+## Consensus ADP System
+`storage.synthesizeAdpFromPicks()` computes consensus ADP for every player:
+- Uses only the **latest mock draft per source** (avoids double-counting stale versions)
+- Weighted by analyst `accuracyWeight` (higher accuracy → more influence)
+- Runs automatically: on startup (10s delay), after every scrape run, and on daily cron
+- Now covers **all 140 players** (was only 50 hand-coded ADP values before)
+
+## Odds Integration
+- **The Odds API** (`server/scrapers/odds.ts`): Fetches NFL Draft odds from DraftKings, FanDuel, BetMGM, Caesars, ESPN Bet, Bet365, etc.
+- Requires `ODDS_API_KEY` secret (free tier: 500 req/month at theoddsapi.com)
+- Draft markets appear seasonally (~3-4 weeks before draft in April)
+- Supports market types: first_overall, top_3_pick, top_5_pick, top_10_pick, first_round, and pick-number-specific markets
+- `POST /api/scrape/clear-placeholder-odds` removes seeded demo data when real data is available
+
+## Discrepancy / "Odds Beat ADP" Calculation
+`storage.getDiscrepancy()` computes ADP vs implied pick from odds:
+- **Bucket markets**: Hierarchical probability model (first_overall → top_3 → top_5 → top_10 → first_round) with midpoint band weights
+- **Pick-number markets**: Probability-weighted expected pick with tail default for unmodeled mass
+- Signal: bullish (ADP worse than odds imply), bearish (ADP better than odds imply), neutral
 
 ## Auto-Scrapers (server/scrapers/)
 14 scrapers running daily at 6am ET. All scrapers use `ensurePlayer()` for auto-player creation:
@@ -45,28 +69,10 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 13. **nfl_jeremiah_bigboard** — Daniel Jeremiah Top-50 Big Board (NFL.com, 38 picks, boardType=bigboard)
 14. **mockdraftnfl** — MockDraftNFL consensus (32 picks, full R1)
 
-## Auto-Player Creation
-All scrapers use `ensurePlayer(name, players, position, college)` from `server/scrapers/index.ts`.
-When a scraper finds a player not in the DB, it auto-creates them with name + position + college.
-This grew the player DB from 50 → 140 players in a single scrape session.
-
-## Headshots
-Headshot scraper (`server/scrapers/headshots.ts`) scrapes multiple NFL.com articles:
-- Daniel Jeremiah Top-50 (42 unique prospects)
-- Zierlein, Brooks, Davis mock draft articles
-Extracts `alt="PlayerName"` + `god-prospect-headshots/{year}/{uuid}` pairs.
-Currently 42/140 players have headshots. Headshots auto-update whenever NFL.com article scrapers run.
-NFL.com headshot URL format: `https://static.www.nfl.com/image/private/t_official/f_auto/league/god-prospect-headshots/{year}/{uuid}`
-
-## Big Boards
-boardType field on mock_drafts: "mock" | "bigboard"
-Current big boards: Tankathon (42 picks), Jeremiah Top-50 (38 picks, nfl.com)
-Awaiting links for: Brugler, Kiper, McShay, and other analysts
-
-## Startup Behavior
-On server start, `ensureSourceKeysFix()` in routes.ts:
-1. Patches all 43 analysts to have sourceKeys (was null for early-seeded analysts)
-2. Initializes scrape_jobs for all 14 scrapers (only creates, doesn't overwrite existing success status)
+## Daily Cron (6am ET)
+1. Run all 14 scrapers sequentially
+2. Synthesize consensus ADP from latest picks per source
+3. Fetch sportsbook odds via The Odds API (when draft markets are available)
 
 ## Pages
 - `/` — Dashboard (ADP movers, odds signals, activity feed, ticker)
@@ -76,14 +82,7 @@ On server start, `ensureSourceKeysFix()` in routes.ts:
 - `/big-boards` — Analyst big board rankings
 - `/sources` — Sources leaderboard with scrape status for all 43 analysts
 
-## ADP Snapshot Dates
-Jan 29, Feb 20, Mar 8, Mar 12, Mar 15 (current)
-`adpChange` = prevAdp - currentAdp (positive = rising stock)
-
-## Scrapers Waiting for Links
-When user provides non-paywalled URLs:
-- Todd McShay (ESPN/The McShay Report)
-- Mel Kiper Jr. (ESPN)
-- Dane Brugler (The Athletic)
-- Matthew Freedman (direct article URL, not via NFLMDB)
-- Any additional mock draft or big board sources
+## Environment Secrets
+- `DATABASE_URL` — PostgreSQL connection string (auto-managed by Replit)
+- `SESSION_SECRET` — Express session secret
+- `ODDS_API_KEY` — The Odds API key for sportsbook odds (theoddsapi.com)

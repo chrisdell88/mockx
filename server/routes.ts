@@ -322,20 +322,20 @@ export async function registerRoutes(
   }, 10000);
 
   // ─── Daily cron: scrape all sources at 6:00 AM ET ──────────────────────
-  cron.schedule("0 11 * * *", async () => {
-    console.log("[CRON] Running daily scrape at 6am ET...");
-    const results = await runAllScrapers();
-    console.log("[CRON] Done:", results.map(r => `${r.sourceKey}=${r.picksFound} picks`).join(", "));
-
-    console.log("[CRON] Synthesizing consensus ADP...");
-    await storage.synthesizeAdpFromPicks();
-
-    console.log("[CRON] Fetching sportsbook odds...");
+  cron.schedule("0 6 * * *", async () => {
     try {
+      console.log("[CRON] Running daily scrape at 6am ET...");
+      const results = await runAllScrapers();
+      console.log("[CRON] Done:", results.map(r => `${r.sourceKey}=${r.picksFound} picks`).join(", "));
+
+      console.log("[CRON] Synthesizing consensus ADP...");
+      await storage.synthesizeAdpFromPicks();
+
+      console.log("[CRON] Fetching sportsbook odds...");
       const { scrapeOdds } = await import("./scrapers/odds");
       await scrapeOdds();
     } catch (err) {
-      console.warn("[CRON] Odds scrape failed:", err);
+      console.error("[CRON] Daily scrape failed:", err);
     }
   }, { timezone: "America/New_York" });
 

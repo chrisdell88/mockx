@@ -145,6 +145,7 @@ export async function scrapeOdds(): Promise<{
             apiKey,
             regions: "us,us2",
             markets: "h2h,outrights,spreads,totals",
+            bookmakers: "draftkings,fanduel,betmgm,williamhill_us,espnbet,betrivers,pointsbetus,bet365",
             oddsFormat: "decimal",
           },
           timeout: 15000,

@@ -561,10 +561,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async clearPlaceholderOdds(): Promise<number> {
-    const cutoff = new Date("2026-03-16T00:00:00.000Z");
-    const result = await db.delete(odds).where(lte(odds.date, cutoff)).returning();
-    console.log(`[ODDS CLEANUP] Removed ${result.length} placeholder odds rows (pre-${cutoff.toISOString().slice(0, 10)}).`);
-    return result.length;
+    const seededDates = [
+      new Date("2026-01-29"),
+      new Date("2026-02-20"),
+      new Date("2026-03-08"),
+      new Date("2026-03-15"),
+    ];
+
+    let totalRemoved = 0;
+    for (const d of seededDates) {
+      const dayStart = new Date(d.toISOString().slice(0, 10) + "T00:00:00.000Z");
+      const dayEnd = new Date(d.toISOString().slice(0, 10) + "T23:59:59.999Z");
+      const result = await db.delete(odds)
+        .where(and(gte(odds.date, dayStart), lte(odds.date, dayEnd)))
+        .returning();
+      totalRemoved += result.length;
+    }
+
+    if (totalRemoved > 0) {
+      console.log(`[ODDS CLEANUP] Removed ${totalRemoved} placeholder odds rows from seeded dates.`);
+    }
+    return totalRemoved;
   }
 }
 

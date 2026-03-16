@@ -144,7 +144,7 @@ export async function scrapeOdds(): Promise<{
           params: {
             apiKey,
             regions: "us,us2",
-            markets: "h2h,outrights",
+            markets: "h2h,outrights,spreads,totals",
             oddsFormat: "decimal",
           },
           timeout: 15000,
@@ -188,7 +188,21 @@ export async function scrapeOdds(): Promise<{
       }
     }
 
-    console.log(`[ODDS] Inserted ${totalInserted} odds rows from ${sportsUsed.length} sport(s): ${sportsUsed.join(", ")}`);
+    if (totalInserted > 0) {
+      console.log(`[ODDS] Clearing placeholder odds (real data arrived)...`);
+      const cleared = await storage.clearPlaceholderOdds();
+      if (cleared > 0) {
+        console.log(`[ODDS] Removed ${cleared} placeholder odds rows.`);
+      }
+    }
+
+    const requiredBooks = ["DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN Bet"];
+    const missingBooks = requiredBooks.filter(b => !sportsUsed.length);
+    if (sportsUsed.length === 0) {
+      console.log(`[ODDS] No draft sports found — required bookmakers (${requiredBooks.join(", ")}) may not have NFL Draft markets yet.`);
+    }
+
+    console.log(`[ODDS] Inserted/updated ${totalInserted} odds rows from ${sportsUsed.length} sport(s): ${sportsUsed.join(", ")}`);
     return { picksFound: totalInserted, sportsFound: sportsUsed };
   } catch (err: any) {
     console.error("[ODDS] Fatal error:", err?.message);

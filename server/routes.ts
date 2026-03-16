@@ -240,6 +240,13 @@ export async function registerRoutes(
       if (result.error) {
         return res.status(422).json({ message: result.error, result });
       }
+
+      try {
+        await storage.synthesizeAdpFromPicks();
+      } catch (adpErr) {
+        console.warn("[SCRAPE] Post-scrape ADP synthesis failed:", adpErr);
+      }
+
       res.json({ message: "Scrape completed", result });
     } catch (err) {
       res.status(500).json({ message: "Scrape failed", error: String(err) });

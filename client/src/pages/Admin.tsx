@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Lock, LogOut, Play, RefreshCw, Plus, Search, Save, Users, FileText, Settings } from "lucide-react";
+import { Lock, LogOut, Play, RefreshCw, Plus, Search, Save, Users, FileText, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 
 function LoginGate({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState("");
@@ -70,6 +71,21 @@ function LoginGate({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+function StatusBadge({ status }: { status?: string | null }) {
+  if (!status) return <Badge variant="outline" className="text-zinc-500 border-zinc-700">None</Badge>;
+  const colors: Record<string, string> = {
+    success: "bg-emerald-900/50 text-emerald-400 border-emerald-800",
+    error: "bg-red-900/50 text-red-400 border-red-800",
+    running: "bg-blue-900/50 text-blue-400 border-blue-800",
+    pending: "bg-yellow-900/50 text-yellow-400 border-yellow-800",
+  };
+  return (
+    <Badge variant="outline" className={colors[status] ?? "text-zinc-500 border-zinc-700"}>
+      {status}
+    </Badge>
+  );
+}
+
 function SourcesTab() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -89,6 +105,22 @@ function SourcesTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/analysts"] });
       setEditingId(null);
       toast({ title: "Analyst updated" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) => {
+      await apiRequest("PATCH", `/api/admin/analysts/${id}`, { enabled: enabled ? 1 : 0 });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/analysts"] });
+      toast({ title: "Analyst toggled" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Toggle failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -116,6 +148,9 @@ function SourcesTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/analysts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/scrape-logs"] });
       toast({ title: "All scrapers completed" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Scrape all failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -155,8 +190,10 @@ function SourcesTab() {
           <Table>
             <TableHeader>
               <TableRow className="border-zinc-800 hover:bg-zinc-900">
+                <TableHead className="text-zinc-400">Enabled</TableHead>
                 <TableHead className="text-zinc-400">Name</TableHead>
                 <TableHead className="text-zinc-400">Source Key</TableHead>
+                <TableHead className="text-zinc-400">Type</TableHead>
                 <TableHead className="text-zinc-400">Weight</TableHead>
                 <TableHead className="text-zinc-400">Picks</TableHead>
                 <TableHead className="text-zinc-400">Status</TableHead>
@@ -167,9 +204,26 @@ function SourcesTab() {
             </TableHeader>
             <TableBody>
               {filtered.map((a: any) => (
-                <TableRow key={a.id} className="border-zinc-800 hover:bg-zinc-900/50" data-testid={`row-analyst-${a.id}`}>
+                <TableRow
+                  key={a.id}
+                  className={`border-zinc-800 hover:bg-zinc-900/50 ${a.enabled === 0 ? "opacity-50" : ""}`}
+                  data-testid={`row-analyst-${a.id}`}
+                >
+                  <TableCell>
+                    <Switch
+                      data-testid={`toggle-analyst-${a.id}`}
+                      checked={a.enabled !== 0}
+                      onCheckedChange={(checked) => toggleMutation.mutate({ id: a.id, enabled: checked })}
+                      disabled={toggleMutation.isPending}
+                    />
+                  </TableCell>
                   <TableCell className="text-white font-medium">{a.name}</TableCell>
                   <TableCell className="text-zinc-400 font-mono text-xs">{a.sourceKey ?? "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-zinc-400 border-zinc-700 text-xs">
+                      {a.boardType === "bigboard" ? "Big Board" : "Mock"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     {editingId === a.id ? (
                       <Input
@@ -262,21 +316,6 @@ function SourcesTab() {
   );
 }
 
-function StatusBadge({ status }: { status?: string | null }) {
-  if (!status) return <Badge variant="outline" className="text-zinc-500 border-zinc-700">None</Badge>;
-  const colors: Record<string, string> = {
-    success: "bg-emerald-900/50 text-emerald-400 border-emerald-800",
-    error: "bg-red-900/50 text-red-400 border-red-800",
-    running: "bg-blue-900/50 text-blue-400 border-blue-800",
-    pending: "bg-yellow-900/50 text-yellow-400 border-yellow-800",
-  };
-  return (
-    <Badge variant="outline" className={colors[status] ?? "text-zinc-500 border-zinc-700"}>
-      {status}
-    </Badge>
-  );
-}
-
 function AddAnalystForm() {
   const { toast } = useToast();
   const [name, setName] = useState("");
@@ -285,6 +324,7 @@ function AddAnalystForm() {
   const [scrapeUrl, setScrapeUrl] = useState("");
   const [weight, setWeight] = useState("0.70");
   const [boardType, setBoardType] = useState("mock");
+  const [scraperType, setScraperType] = useState("custom");
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -295,12 +335,15 @@ function AddAnalystForm() {
         scrapeUrl: scrapeUrl || undefined,
         accuracyWeight: parseFloat(weight) || 0.70,
         isConsensus: 0,
+        boardType,
+        scraperType,
+        enabled: 1,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/analysts"] });
       toast({ title: "Analyst added" });
-      setName(""); setOutlet(""); setSourceKey(""); setScrapeUrl(""); setWeight("0.70");
+      setName(""); setOutlet(""); setSourceKey(""); setScrapeUrl(""); setWeight("0.70"); setBoardType("mock"); setScraperType("custom");
     },
     onError: (err: any) => {
       toast({ title: "Failed to create analyst", description: err.message, variant: "destructive" });
@@ -360,9 +403,22 @@ function AddAnalystForm() {
             min="0"
             max="1"
           />
+          <Select value={scraperType} onValueChange={setScraperType}>
+            <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white" data-testid="select-scraper-type">
+              <SelectValue placeholder="Scraper Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nfl_article">NFL Article</SelectItem>
+              <SelectItem value="walter">WalterFootball</SelectItem>
+              <SelectItem value="sharp">SharpFootball</SelectItem>
+              <SelectItem value="mockdraftnfl">MockDraftNFL</SelectItem>
+              <SelectItem value="tankathon">Tankathon</SelectItem>
+              <SelectItem value="custom">Custom URL</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={boardType} onValueChange={setBoardType}>
             <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white" data-testid="select-board-type">
-              <SelectValue />
+              <SelectValue placeholder="Board Type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="mock">Mock Draft</SelectItem>
@@ -373,7 +429,7 @@ function AddAnalystForm() {
             data-testid="button-add-analyst"
             type="submit"
             disabled={createMutation.isPending || !name}
-            className="bg-emerald-600 hover:bg-emerald-700 col-span-2"
+            className="bg-emerald-600 hover:bg-emerald-700"
           >
             {createMutation.isPending ? "Adding..." : "Add Analyst"}
           </Button>
@@ -383,42 +439,83 @@ function AddAnalystForm() {
   );
 }
 
+const LOGS_PER_PAGE = 15;
+
 function LogsTab() {
+  const [page, setPage] = useState(0);
+
   const { data: logs, isLoading } = useQuery<any[]>({
     queryKey: ["/api/admin/scrape-logs"],
   });
 
+  const totalPages = Math.ceil((logs ?? []).length / LOGS_PER_PAGE);
+  const paginatedLogs = (logs ?? []).slice(page * LOGS_PER_PAGE, (page + 1) * LOGS_PER_PAGE);
+
   return (
-    <div className="border border-zinc-800 rounded-lg overflow-hidden">
-      {isLoading ? (
-        <div className="text-zinc-400 text-center py-8">Loading logs...</div>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow className="border-zinc-800 hover:bg-zinc-900">
-              <TableHead className="text-zinc-400">Source Key</TableHead>
-              <TableHead className="text-zinc-400">Status</TableHead>
-              <TableHead className="text-zinc-400">Picks</TableHead>
-              <TableHead className="text-zinc-400">Last Run</TableHead>
-              <TableHead className="text-zinc-400">Error</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(logs ?? []).map((log: any) => (
-              <TableRow key={log.id} className="border-zinc-800 hover:bg-zinc-900/50" data-testid={`row-log-${log.id}`}>
-                <TableCell className="text-white font-mono text-xs">{log.sourceKey}</TableCell>
-                <TableCell><StatusBadge status={log.status} /></TableCell>
-                <TableCell className="text-zinc-300">{log.picksFound ?? "—"}</TableCell>
-                <TableCell className="text-zinc-500 text-xs">
-                  {log.lastRunAt ? new Date(log.lastRunAt).toLocaleString() : "—"}
-                </TableCell>
-                <TableCell className="text-red-400 text-xs max-w-[300px] truncate">
-                  {log.errorMessage ?? "—"}
-                </TableCell>
+    <div className="space-y-4">
+      <div className="border border-zinc-800 rounded-lg overflow-hidden">
+        {isLoading ? (
+          <div className="text-zinc-400 text-center py-8">Loading logs...</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="border-zinc-800 hover:bg-zinc-900">
+                <TableHead className="text-zinc-400">Source Key</TableHead>
+                <TableHead className="text-zinc-400">Status</TableHead>
+                <TableHead className="text-zinc-400">Picks</TableHead>
+                <TableHead className="text-zinc-400">Last Run</TableHead>
+                <TableHead className="text-zinc-400">Error</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paginatedLogs.map((log: any) => (
+                <TableRow key={log.id} className="border-zinc-800 hover:bg-zinc-900/50" data-testid={`row-log-${log.id}`}>
+                  <TableCell className="text-white font-mono text-xs">{log.sourceKey}</TableCell>
+                  <TableCell><StatusBadge status={log.status} /></TableCell>
+                  <TableCell className="text-zinc-300">{log.picksFound ?? "—"}</TableCell>
+                  <TableCell className="text-zinc-500 text-xs">
+                    {log.lastRunAt ? new Date(log.lastRunAt).toLocaleString() : "—"}
+                  </TableCell>
+                  <TableCell className="text-red-400 text-xs max-w-[300px] truncate">
+                    {log.errorMessage ?? "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <span className="text-zinc-500 text-sm">
+            Page {page + 1} of {totalPages} ({(logs ?? []).length} total)
+          </span>
+          <div className="flex gap-2">
+            <Button
+              data-testid="button-logs-prev"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage(Math.max(0, page - 1))}
+              disabled={page === 0}
+              className="text-zinc-400 hover:text-white"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Prev
+            </Button>
+            <Button
+              data-testid="button-logs-next"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+              disabled={page >= totalPages - 1}
+              className="text-zinc-400 hover:text-white"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -444,6 +541,9 @@ function PlayersTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/players"] });
       setEditingId(null);
       toast({ title: "Player updated" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -521,7 +621,7 @@ function PlayersTab() {
                       />
                     ) : (
                       <span className="text-zinc-500 text-xs truncate max-w-[150px] block">
-                        {p.imageUrl ? "✓ Set" : "—"}
+                        {p.imageUrl ? "Set" : "—"}
                       </span>
                     )}
                   </TableCell>
@@ -608,7 +708,7 @@ export default function Admin() {
             <p className="text-zinc-500 text-sm">Manage sources, scrapers, and player data</p>
           </div>
           <div className="flex items-center gap-3">
-            <a href="/" className="text-zinc-400 hover:text-white text-sm">← Back to App</a>
+            <a href="/" className="text-zinc-400 hover:text-white text-sm">Back to App</a>
             <Button
               data-testid="button-admin-logout"
               variant="ghost"
@@ -626,7 +726,7 @@ export default function Admin() {
           <TabsList className="bg-zinc-900 border border-zinc-800">
             <TabsTrigger value="sources" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400" data-testid="tab-sources">
               <Users className="w-4 h-4 mr-2" />
-              Sources ({authCheck.data ? "" : "..."})
+              Sources
             </TabsTrigger>
             <TabsTrigger value="logs" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400" data-testid="tab-logs">
               <FileText className="w-4 h-4 mr-2" />

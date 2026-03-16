@@ -11,7 +11,10 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  const ADMIN_PASSWORD = process.env.SESSION_SECRET || "draftx-admin-2026";
+  const ADMIN_PASSWORD = process.env.SESSION_SECRET;
+  if (!ADMIN_PASSWORD) {
+    console.warn("[ADMIN] WARNING: SESSION_SECRET not set — admin login is disabled");
+  }
 
   const requireAdmin = (req: any, res: any, next: any) => {
     if (!req.session?.isAdmin) {
@@ -21,6 +24,9 @@ export async function registerRoutes(
   };
 
   app.post("/api/admin/login", (req, res) => {
+    if (!ADMIN_PASSWORD) {
+      return res.status(503).json({ message: "Admin login disabled — SESSION_SECRET not configured" });
+    }
     const { password } = req.body;
     if (password === ADMIN_PASSWORD) {
       (req as any).session.isAdmin = true;

@@ -28,9 +28,12 @@ export const analysts = pgTable("analysts", {
   huddleScore5Year: numeric("huddle_score_5_year"),
   accuracyWeight: numeric("accuracy_weight"),
   isConsensus: integer("is_consensus").default(0),
-  sourceKey: text("source_key"),   // machine key, e.g. "walterfootball_charlie"
-  scrapeUrl: text("scrape_url"),   // URL to scrape for auto-updates
+  sourceKey: text("source_key"),
+  scrapeUrl: text("scrape_url"),
   notes: text("notes"),
+  enabled: integer("enabled").default(1),
+  scraperType: text("scraper_type"),
+  boardType: text("board_type").default("mock"),
 });
 
 export const mockDrafts = pgTable("mock_drafts", {

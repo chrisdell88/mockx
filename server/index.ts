@@ -23,11 +23,15 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  console.warn("[SESSION] WARNING: SESSION_SECRET not set — using random secret (sessions will not persist across restarts)");
+}
 app.use(session({
-  secret: process.env.SESSION_SECRET || "draftx-session-fallback",
+  secret: sessionSecret || require("crypto").randomBytes(32).toString("hex"),
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 },
+  cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true, sameSite: "lax" },
 }));
 
 export function log(message: string, source = "express") {

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  players, analysts, mockDrafts, mockDraftPicks, adpHistory, odds, scrapeJobs,
+  players, analysts, mockDrafts, mockDraftPicks, adpHistory, odds, scrapeJobs, scrapeRuns,
   type Player, type InsertPlayer,
   type Analyst, type InsertAnalyst,
   type MockDraft, type InsertMockDraft,
@@ -8,6 +8,7 @@ import {
   type AdpHistory, type InsertAdpHistory,
   type Odds, type InsertOdds,
   type ScrapeJob, type InsertScrapeJob,
+  type ScrapeRun,
 } from "@shared/schema";
 import { eq, desc, asc, and, gte, lte, sql } from "drizzle-orm";
 
@@ -54,6 +55,8 @@ export interface IStorage {
   updateAnalyst(id: number, data: Partial<InsertAnalyst>): Promise<Analyst | null>;
   updatePlayer(id: number, data: Partial<InsertPlayer>): Promise<Player | null>;
   getScrapeLogs(limit?: number): Promise<ScrapeJob[]>;
+  logScrapeRun(sourceKey: string, status: string, picksFound?: number, errorMessage?: string): Promise<ScrapeRun>;
+  getScrapeRunHistory(limit?: number): Promise<ScrapeRun[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -576,6 +579,20 @@ export class DatabaseStorage implements IStorage {
 
   async getScrapeLogs(limit = 50): Promise<ScrapeJob[]> {
     return await db.select().from(scrapeJobs).orderBy(desc(scrapeJobs.lastRunAt)).limit(limit);
+  }
+
+  async logScrapeRun(sourceKey: string, status: string, picksFound?: number, errorMessage?: string): Promise<ScrapeRun> {
+    const [run] = await db.insert(scrapeRuns).values({
+      sourceKey,
+      status,
+      picksFound: picksFound ?? null,
+      errorMessage: errorMessage ?? null,
+    }).returning();
+    return run;
+  }
+
+  async getScrapeRunHistory(limit = 50): Promise<ScrapeRun[]> {
+    return await db.select().from(scrapeRuns).orderBy(desc(scrapeRuns.runAt)).limit(limit);
   }
 
   async clearPlaceholderOdds(): Promise<number> {

@@ -134,6 +134,7 @@ export async function runScraper(sourceKey: string): Promise<ScraperResult> {
       errorMessage: undefined as any,
       lastRunAt: new Date(),
     });
+    await storage.logScrapeRun(sourceKey, "success", result.picksFound);
     
     return result;
   } catch (err: any) {
@@ -144,6 +145,7 @@ export async function runScraper(sourceKey: string): Promise<ScraperResult> {
       errorMessage,
       lastRunAt: new Date(),
     });
+    await storage.logScrapeRun(sourceKey, "error", 0, errorMessage);
     return { sourceKey, picksFound: 0, newMockCreated: false, error: errorMessage };
   }
 }

@@ -427,8 +427,8 @@ export async function registerRoutes(
 
   app.get("/api/admin/scrape-logs", requireAdmin, async (_req, res) => {
     try {
-      const logs = await storage.getScrapeLogs(50);
-      res.json(logs);
+      const runs = await storage.getScrapeRunHistory(100);
+      res.json(runs);
     } catch (err) {
       res.status(500).json({ message: "Failed to load scrape logs", error: String(err) });
     }
@@ -468,6 +468,12 @@ export async function registerRoutes(
   app.post("/api/admin/scrape/:sourceKey", requireAdmin, async (req, res) => {
     try {
       const { sourceKey } = req.params;
+      const scraperExists = SCRAPERS.some(s => s.sourceKey === sourceKey);
+      if (!scraperExists) {
+        return res.status(404).json({
+          message: `No scraper registered for source key "${sourceKey}". Register a scraper module in server/scrapers/index.ts first.`,
+        });
+      }
       const result = await runScraper(sourceKey);
       if (result.error) {
         return res.status(422).json({ message: result.error, result });

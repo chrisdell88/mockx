@@ -474,7 +474,7 @@ function LogsTab() {
                   <TableCell><StatusBadge status={log.status} /></TableCell>
                   <TableCell className="text-zinc-300">{log.picksFound ?? "—"}</TableCell>
                   <TableCell className="text-zinc-500 text-xs">
-                    {log.lastRunAt ? new Date(log.lastRunAt).toLocaleString() : "—"}
+                    {(log.runAt || log.lastRunAt) ? new Date(log.runAt || log.lastRunAt).toLocaleString() : "—"}
                   </TableCell>
                   <TableCell className="text-red-400 text-xs max-w-[300px] truncate">
                     {log.errorMessage ?? "—"}

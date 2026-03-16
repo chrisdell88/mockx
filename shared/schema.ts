@@ -69,15 +69,23 @@ export const odds = pgTable("odds", {
   date: timestamp("date").defaultNow(),
 });
 
-// Tracks automated scraping runs per source
 export const scrapeJobs = pgTable("scrape_jobs", {
   id: serial("id").primaryKey(),
   sourceKey: text("source_key").notNull().unique(),
   lastRunAt: timestamp("last_run_at"),
-  status: text("status").default("pending"),  // 'pending'|'running'|'success'|'error'
+  status: text("status").default("pending"),
   picksFound: integer("picks_found"),
   errorMessage: text("error_message"),
   notes: text("notes"),
+});
+
+export const scrapeRuns = pgTable("scrape_runs", {
+  id: serial("id").primaryKey(),
+  sourceKey: text("source_key").notNull(),
+  status: text("status").notNull(),
+  picksFound: integer("picks_found"),
+  errorMessage: text("error_message"),
+  runAt: timestamp("run_at").defaultNow(),
 });
 
 export const insertPlayerSchema = createInsertSchema(players).omit({ id: true });
@@ -104,6 +112,7 @@ export const insertScrapeJobSchema = createInsertSchema(scrapeJobs).omit({ id: t
   lastRunAt: z.date().optional(),
   picksFound: z.number().optional(),
 });
+export const insertScrapeRunSchema = createInsertSchema(scrapeRuns).omit({ id: true, runAt: true });
 
 export type Player = typeof players.$inferSelect;
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
@@ -125,3 +134,6 @@ export type InsertOdds = z.infer<typeof insertOddsSchema>;
 
 export type ScrapeJob = typeof scrapeJobs.$inferSelect;
 export type InsertScrapeJob = z.infer<typeof insertScrapeJobSchema>;
+
+export type ScrapeRun = typeof scrapeRuns.$inferSelect;
+export type InsertScrapeRun = z.infer<typeof insertScrapeRunSchema>;

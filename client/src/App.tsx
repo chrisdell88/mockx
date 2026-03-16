@@ -11,6 +11,7 @@ import PlayerDetail from "./pages/PlayerDetail";
 import MockDrafts from "./pages/MockDrafts";
 import BigBoards from "./pages/BigBoards";
 import Sources from "./pages/Sources";
+import Admin from "./pages/Admin";
 import NotFound from "@/pages/not-found";
 import Layout from "@/components/Layout";
 
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/sources">
         {() => <Layout><Sources /></Layout>}
       </Route>
+      <Route path="/admin" component={Admin} />
       <Route path="/pipeline" component={MockDrafts} />
       <Route component={NotFound} />
     </Switch>

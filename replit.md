@@ -25,12 +25,19 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 - `GET /api/analysts` — all 43 analysts sorted by accuracy weight
 - `GET /api/mock-drafts` — all mock drafts
 - `GET /api/scrape/status` — scrape job status + scraper registry (14 scrapers)
-- `POST /api/scrape` — run all auto-scrapers + ADP synthesis
-- `POST /api/scrape/headshots` — scrape NFL.com articles for headshots only
-- `POST /api/scrape/odds` — pull real-time sportsbook odds via The Odds API
-- `POST /api/synthesize-adp` — recompute consensus ADP from latest mock picks
-- `POST /api/scrape/clear-placeholder-odds` — remove seeded placeholder odds
-- `POST /api/scrape/:sourceKey` — run specific scraper
+- `POST /api/scrape` — run all auto-scrapers + ADP synthesis (**admin-protected**)
+- `POST /api/scrape/headshots` — scrape NFL.com articles for headshots (**admin-protected**)
+- `POST /api/scrape/odds` — pull real-time sportsbook odds (**admin-protected**)
+- `POST /api/synthesize-adp` — recompute consensus ADP (**admin-protected**)
+- `POST /api/scrape/clear-placeholder-odds` — remove seeded placeholder odds (**admin-protected**)
+- `POST /api/scrape/:sourceKey` — run specific scraper (**admin-protected**)
+
+## Admin Panel (`/admin`)
+Password-protected admin UI at `/admin` with session-based auth (express-session).
+- **Auth**: POST `/api/admin/login` with `{ password }` — password is `SESSION_SECRET` env var (fallback: `"draftx-admin-2026"`)
+- **Routes**: GET/PATCH `/api/admin/analysts/:id`, POST `/api/admin/analysts`, GET/PATCH `/api/admin/players/:id`, GET `/api/admin/scrape-logs`, POST `/api/admin/scrape-all`, POST `/api/admin/scrape/:sourceKey`
+- **UI Tabs**: Sources (analyst table + add form + per-source scrape trigger + scrape-all), Scrape Logs, Players (search + inline edit)
+- All scrape-mutating routes (legacy `/api/scrape*` and admin `/api/admin/scrape*`) require admin session
 
 ## Consensus ADP System
 `storage.synthesizeAdpFromPicks()` computes consensus ADP for every player:
@@ -82,6 +89,7 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 - `/mock-drafts` — Mock draft matrix (Mock/BigBoard tab toggle)
 - `/big-boards` — Analyst big board rankings
 - `/sources` — Sources leaderboard with scrape status for all 43 analysts
+- `/admin` — Admin panel (password-protected: sources CRUD, scrape triggers, player editing, scrape logs)
 
 ## Environment Secrets
 - `DATABASE_URL` — PostgreSQL connection string (auto-managed by Replit)

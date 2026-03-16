@@ -10,7 +10,35 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
+  const ADMIN_PASSWORD = process.env.SESSION_SECRET || "draftx-admin-2026";
+
+  const requireAdmin = (req: any, res: any, next: any) => {
+    if (!req.session?.isAdmin) {
+      return res.status(401).json({ message: "Admin access required" });
+    }
+    next();
+  };
+
+  app.post("/api/admin/login", (req, res) => {
+    const { password } = req.body;
+    if (password === ADMIN_PASSWORD) {
+      (req as any).session.isAdmin = true;
+      res.json({ ok: true });
+    } else {
+      res.status(401).json({ message: "Invalid password" });
+    }
+  });
+
+  app.get("/api/admin/check", (req, res) => {
+    res.json({ isAdmin: !!(req as any).session?.isAdmin });
+  });
+
+  app.post("/api/admin/logout", (req, res) => {
+    (req as any).session.isAdmin = false;
+    res.json({ ok: true });
+  });
+
   app.get(api.players.list.path, async (req, res) => {
     try {
       const players = await storage.getPlayers();
@@ -179,8 +207,8 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Run all scrapers ───────────────────────────────────────────────────
-  app.post("/api/scrape", async (req, res) => {
+  // ─── Run all scrapers (admin-protected) ────────────────────────────────
+  app.post("/api/scrape", requireAdmin, async (req, res) => {
     try {
       const results = await runAllScrapers();
       const adpResult = await storage.synthesizeAdpFromPicks();
@@ -190,8 +218,8 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Odds scraper ──────────────────────────────────────────────────────
-  app.post("/api/scrape/odds", async (req, res) => {
+  // ─── Odds scraper (admin-protected) ───────────────────────────────────
+  app.post("/api/scrape/odds", requireAdmin, async (req, res) => {
     try {
       const { scrapeOdds } = await import("./scrapers/odds");
       const result = await scrapeOdds();
@@ -201,8 +229,8 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Consensus ADP synthesis ──────────────────────────────────────────
-  app.post("/api/synthesize-adp", async (req, res) => {
+  // ─── Consensus ADP synthesis (admin-protected) ────────────────────────
+  app.post("/api/synthesize-adp", requireAdmin, async (req, res) => {
     try {
       const result = await storage.synthesizeAdpFromPicks();
       res.json({ message: "ADP synthesis completed", ...result });
@@ -211,8 +239,8 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Clear placeholder odds ───────────────────────────────────────────
-  app.post("/api/scrape/clear-placeholder-odds", async (req, res) => {
+  // ─── Clear placeholder odds (admin-protected) ─────────────────────────
+  app.post("/api/scrape/clear-placeholder-odds", requireAdmin, async (req, res) => {
     try {
       const removed = await storage.clearPlaceholderOdds();
       res.json({ message: `Removed ${removed} placeholder odds rows` });
@@ -221,8 +249,8 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Headshot scraper ───────────────────────────────────────────────────
-  app.post("/api/scrape/headshots", async (req, res) => {
+  // ─── Headshot scraper (admin-protected) ────────────────────────────────
+  app.post("/api/scrape/headshots", requireAdmin, async (req, res) => {
     try {
       const { scrapeAllHeadshots } = await import("./scrapers/headshots");
       const stats = await scrapeAllHeadshots();
@@ -232,8 +260,8 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Run specific scraper ───────────────────────────────────────────────
-  app.post("/api/scrape/:sourceKey", async (req, res) => {
+  // ─── Run specific scraper (admin-protected) ────────────────────────────
+  app.post("/api/scrape/:sourceKey", requireAdmin, async (req, res) => {
     try {
       const { sourceKey } = req.params;
       const result = await runScraper(sourceKey);
@@ -330,6 +358,124 @@ export async function registerRoutes(
       console.warn("[STARTUP] ADP synthesis failed:", err);
     }
   }, 10000);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ADMIN PANEL: Source management CRUD routes
+  // ═══════════════════════════════════════════════════════════════════════
+
+  app.get("/api/admin/analysts", requireAdmin, async (_req, res) => {
+    try {
+      const allAnalysts = await storage.getAnalysts();
+      const jobs = await storage.getScrapeJobs();
+      const jobMap = new Map(jobs.map(j => [j.sourceKey, j]));
+
+      const allDrafts = await storage.getMockDrafts();
+      const pickCountByDraft = new Map<number, number>();
+      for (const d of allDrafts) {
+        const count = await storage.getMockDraftPickCount(d.id);
+        pickCountByDraft.set(d.id, count);
+      }
+
+      const totalPicksBySource = new Map<string, number>();
+      for (const d of allDrafts) {
+        const key = d.sourceKey ?? `analyst_${d.analystId}`;
+        const count = pickCountByDraft.get(d.id) ?? 0;
+        totalPicksBySource.set(key, (totalPicksBySource.get(key) ?? 0) + count);
+      }
+
+      const enriched = allAnalysts.map(a => ({
+        ...a,
+        scrapeJob: jobMap.get(a.sourceKey ?? "") ?? null,
+        totalPicks: totalPicksBySource.get(a.sourceKey ?? "") ?? 0,
+      }));
+
+      res.json(enriched);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load analysts", error: String(err) });
+    }
+  });
+
+  app.patch("/api/admin/analysts/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid analyst ID" });
+      const updated = await storage.updateAnalyst(id, req.body);
+      if (!updated) return res.status(404).json({ message: "Analyst not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update analyst", error: String(err) });
+    }
+  });
+
+  app.post("/api/admin/analysts", requireAdmin, async (req, res) => {
+    try {
+      const analyst = await storage.createAnalyst(req.body);
+      if (req.body.sourceKey) {
+        await storage.upsertScrapeJob({ sourceKey: req.body.sourceKey, status: "pending" });
+      }
+      res.status(201).json(analyst);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to create analyst", error: String(err) });
+    }
+  });
+
+  app.get("/api/admin/scrape-logs", requireAdmin, async (_req, res) => {
+    try {
+      const logs = await storage.getScrapeLogs(50);
+      res.json(logs);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load scrape logs", error: String(err) });
+    }
+  });
+
+  app.get("/api/admin/players", requireAdmin, async (_req, res) => {
+    try {
+      const allPlayers = await storage.getPlayers();
+      res.json(allPlayers);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to load players", error: String(err) });
+    }
+  });
+
+  app.patch("/api/admin/players/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid player ID" });
+      const updated = await storage.updatePlayer(id, req.body);
+      if (!updated) return res.status(404).json({ message: "Player not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update player", error: String(err) });
+    }
+  });
+
+  app.post("/api/admin/scrape-all", requireAdmin, async (_req, res) => {
+    try {
+      const results = await runAllScrapers();
+      const adpResult = await storage.synthesizeAdpFromPicks();
+      res.json({ message: "Scrape completed", results, adpSynthesis: adpResult });
+    } catch (err) {
+      res.status(500).json({ message: "Scrape failed", error: String(err) });
+    }
+  });
+
+  app.post("/api/admin/scrape/:sourceKey", requireAdmin, async (req, res) => {
+    try {
+      const { sourceKey } = req.params;
+      const result = await runScraper(sourceKey);
+      if (result.error) {
+        return res.status(422).json({ message: result.error, result });
+      }
+      try {
+        await storage.synthesizeAdpFromPicks();
+      } catch (adpErr) {
+        console.warn("[ADMIN SCRAPE] Post-scrape ADP synthesis failed:", adpErr);
+      }
+      res.json({ message: "Scrape completed", result });
+    } catch (err) {
+      res.status(500).json({ message: "Scrape failed", error: String(err) });
+    }
+  });
 
   // ─── Daily cron: scrape all sources at 6:00 AM ET ──────────────────────
   cron.schedule("0 6 * * *", async () => {

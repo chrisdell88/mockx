@@ -568,12 +568,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateAnalyst(id: number, data: Partial<InsertAnalyst>): Promise<Analyst | null> {
-    const rows = await db.update(analysts).set(data as any).where(eq(analysts.id, id)).returning();
+    const rows = await db.update(analysts)
+      .set(data as typeof analysts.$inferInsert)
+      .where(eq(analysts.id, id))
+      .returning();
     return rows[0] ?? null;
   }
 
   async updatePlayer(id: number, data: Partial<InsertPlayer>): Promise<Player | null> {
-    const rows = await db.update(players).set(data as any).where(eq(players.id, id)).returning();
+    const rows = await db.update(players)
+      .set(data as typeof players.$inferInsert)
+      .where(eq(players.id, id))
+      .returning();
     return rows[0] ?? null;
   }
 

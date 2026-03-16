@@ -158,8 +158,17 @@ export async function runScraper(sourceKey: string): Promise<ScraperResult> {
 // ─── Run all scrapers ────────────────────────────────────────────────────
 
 export async function runAllScrapers(): Promise<ScraperResult[]> {
+  const analysts = await storage.getAnalysts();
+  const enabledKeys = new Set(
+    analysts.filter(a => a.enabled !== 0 && a.sourceKey).map(a => a.sourceKey!)
+  );
+
   const results: ScraperResult[] = [];
   for (const scraper of SCRAPERS) {
+    if (enabledKeys.size > 0 && !enabledKeys.has(scraper.sourceKey)) {
+      results.push({ sourceKey: scraper.sourceKey, picksFound: 0, newMockCreated: false, error: "Disabled" });
+      continue;
+    }
     const result = await runScraper(scraper.sourceKey);
     results.push(result);
   }

@@ -468,6 +468,10 @@ export async function registerRoutes(
   app.post("/api/admin/scrape/:sourceKey", requireAdmin, async (req, res) => {
     try {
       const { sourceKey } = req.params;
+      const analyst = (await storage.getAnalysts()).find(a => a.sourceKey === sourceKey);
+      if (analyst && analyst.enabled === 0) {
+        return res.status(422).json({ message: `Analyst "${sourceKey}" is disabled. Enable it first.` });
+      }
       const scraperExists = SCRAPERS.some(s => s.sourceKey === sourceKey);
       if (!scraperExists) {
         return res.status(404).json({

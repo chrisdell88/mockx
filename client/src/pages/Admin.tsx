@@ -30,6 +30,12 @@ interface PlayerUpdateData {
   imageUrl?: string;
 }
 
+interface EnrichedPlayer extends Player {
+  currentAdp?: number;
+  trend?: "up" | "down" | "flat";
+  adpChange?: number;
+}
+
 function LoginGate({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -317,7 +323,7 @@ function SourcesTab() {
                           variant="ghost"
                           className="h-7 text-blue-400 hover:text-blue-300"
                           disabled={scrapeMutation.isPending}
-                          onClick={() => scrapeMutation.mutate(a.sourceKey)}
+                          onClick={() => scrapeMutation.mutate(a.sourceKey!)}
                         >
                           <Play className="w-3 h-3" />
                         </Button>
@@ -547,7 +553,7 @@ function PlayersTab() {
     position: "", college: "", imageUrl: "",
   });
 
-  const { data: playerList, isLoading } = useQuery<Player[]>({
+  const { data: playerList, isLoading } = useQuery<EnrichedPlayer[]>({
     queryKey: ["/api/admin/players"],
   });
 
@@ -565,7 +571,7 @@ function PlayersTab() {
     },
   });
 
-  const filtered = (playerList ?? []).filter((p: Player) =>
+  const filtered = (playerList ?? []).filter((p: EnrichedPlayer) =>
     !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.position ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.college ?? "").toLowerCase().includes(searchQuery.toLowerCase())
@@ -600,7 +606,7 @@ function PlayersTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p: Player) => (
+              {filtered.map((p: EnrichedPlayer) => (
                 <TableRow key={p.id} className="border-zinc-800 hover:bg-zinc-900/50" data-testid={`row-player-${p.id}`}>
                   <TableCell className="text-white font-medium">{p.name}</TableCell>
                   <TableCell>

@@ -34,8 +34,7 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 
 ## Consensus ADP System
 `storage.synthesizeAdpFromPicks()` computes consensus ADP for every player:
-- Uses only the **latest mock draft per source** (avoids double-counting stale versions)
-- Weighted by analyst `accuracyWeight` (higher accuracy → more influence)
+- Simple average of pick positions across all `mock_draft_picks` rows for each player
 - Runs automatically: on startup (10s delay), after every scrape run, and on daily cron
 - Now covers **all 140 players** (was only 50 hand-coded ADP values before)
 
@@ -48,8 +47,10 @@ Full-stack financial-market-style app that automatically scrapes 30+ analyst moc
 
 ## Discrepancy / "Odds Beat ADP" Calculation
 `storage.getDiscrepancy()` computes ADP vs implied pick from odds:
-- **Bucket markets**: Hierarchical probability model (first_overall → top_3 → top_5 → top_10 → first_round) with midpoint band weights
-- **Pick-number markets**: Probability-weighted expected pick with tail default for unmodeled mass
+- **Pick-number markets** (priority): Probability-weighted expected pick with tail default (pick 40) for unmodeled mass
+- **Bucket markets** (fallback): Hierarchical probability model (first_overall → top_3 → top_5 → top_10 → first_round) with midpoint band weights
+- Market type inference uses word-boundary regex to avoid substring collisions
+- Odds upsert: per player/bookmaker/market/date (no duplicates within same day)
 - Signal: bullish (ADP worse than odds imply), bearish (ADP better than odds imply), neutral
 
 ## Auto-Scrapers (server/scrapers/)

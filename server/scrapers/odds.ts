@@ -75,12 +75,17 @@ function priceToAmerican(price: number): string {
 
 function inferMarketType(sportKey: string, marketKey: string, eventTitle: string): string {
   const lower = (sportKey + " " + marketKey + " " + eventTitle).toLowerCase();
-  if (lower.includes("winner") || lower.includes("first_overall") || lower.includes("#1") || lower.includes("number_1") || lower.includes("no. 1") || lower.includes("1st overall")) return "first_overall";
-  if (lower.includes("top_3") || lower.includes("top 3") || lower.includes("top three")) return "top_3_pick";
-  if (lower.includes("top_5") || lower.includes("top 5") || lower.includes("top five")) return "top_5_pick";
-  if (lower.includes("top_10") || lower.includes("top 10") || lower.includes("top ten")) return "top_10_pick";
-  if (lower.includes("first_round") || lower.includes("first round") || lower.includes("1st round")) return "first_round";
-  if (lower.includes("outright") || lower.includes("winner")) return "first_overall";
+
+  if (/\b(1st overall|first overall|first_overall|#1 pick|number[_\s]1\b|no\.\s*1\b)/.test(lower)) return "first_overall";
+  if (/\btop[_\s]3\b|\btop three\b/.test(lower)) return "top_3_pick";
+  if (/\btop[_\s]5\b|\btop five\b/.test(lower)) return "top_5_pick";
+  if (/\btop[_\s]10\b|\btop ten\b/.test(lower)) return "top_10_pick";
+  if (/\b(first[_\s]round|1st[_\s]round)\b/.test(lower)) return "first_round";
+  if (/\b(outright|winner)\b/.test(lower)) return "first_overall";
+
+  const pickMatch = marketKey.match(/(?:pick|number|#|no)_?(\d+)$/i);
+  if (pickMatch) return `pick_${pickMatch[1]}`;
+
   return marketKey;
 }
 

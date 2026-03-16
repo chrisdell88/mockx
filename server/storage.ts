@@ -180,6 +180,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addOddsHistory(entry: InsertOdds): Promise<Odds> {
+    const entryDate = entry.date ? new Date(entry.date as any) : new Date();
+    const dateStr = entryDate.toISOString().slice(0, 10);
+    const dayStart = new Date(dateStr + "T00:00:00.000Z");
+    const dayEnd = new Date(dateStr + "T23:59:59.999Z");
+
+    const existing = await db.select().from(odds)
+      .where(and(
+        eq(odds.playerId, entry.playerId),
+        eq(odds.bookmaker, entry.bookmaker),
+        eq(odds.marketType, entry.marketType),
+        gte(odds.date, dayStart),
+        lte(odds.date, dayEnd),
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db.update(odds)
+        .set({ odds: entry.odds } as any)
+        .where(eq(odds.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+
     const [created] = await db.insert(odds).values(entry as any).returning();
     return created;
   }
@@ -403,11 +426,30 @@ export class DatabaseStorage implements IStorage {
       if (!pm || pm.size === 0) continue;
 
       const activeMarkets = [...pm.keys()];
-      const hasBuckets = BUCKET_MARKETS.some(m => pm.has(m));
+
+      const pickProbs: Array<{ pick: number; prob: number }> = [];
+      for (const [mkt, oddsStr] of pm.entries()) {
+        const pickMatch = mkt.match(/(?:pick|number|#|no)_?(\d+)$/i);
+        if (pickMatch) {
+          pickProbs.push({ pick: parseInt(pickMatch[1]), prob: amToProb(oddsStr) });
+        }
+      }
 
       let impliedPick: number;
 
-      if (hasBuckets) {
+      if (pickProbs.length > 0) {
+        let modeledProb = 0, weightedSum = 0;
+        for (const { pick, prob } of pickProbs) {
+          weightedSum += pick * prob;
+          modeledProb += prob;
+        }
+        const unmodeledProb = Math.max(0, 1 - modeledProb);
+        const tailPick = 40;
+        impliedPick = weightedSum + unmodeledProb * tailPick;
+      } else {
+        const hasBuckets = BUCKET_MARKETS.some(m => pm.has(m));
+        if (!hasBuckets) continue;
+
         const p1   = amToProb(pm.get("first_overall") ?? "+100000");
         const p3   = Math.max(p1, amToProb(pm.get("top_3_pick")   ?? "+100000"));
         const p5   = Math.max(p3, amToProb(pm.get("top_5_pick")   ?? "+100000"));
@@ -421,26 +463,6 @@ export class DatabaseStorage implements IStorage {
           (p10 - p5)  * 8   +
           (p1st - p10) * 18 +
           (1 - p1st)  * 35;
-      } else {
-        const probs: Array<{ pick: number; prob: number }> = [];
-        for (const [mkt, oddsStr] of pm.entries()) {
-          const pickMatch = mkt.match(/(?:pick|number|#|no)_?(\d+)$/i);
-          if (pickMatch) {
-            probs.push({ pick: parseInt(pickMatch[1]), prob: amToProb(oddsStr) });
-          }
-        }
-        if (probs.length > 0) {
-          let modeledProb = 0, weightedSum = 0;
-          for (const { pick, prob } of probs) {
-            weightedSum += pick * prob;
-            modeledProb += prob;
-          }
-          const unmodeledProb = Math.max(0, 1 - modeledProb);
-          const tailPick = 40;
-          impliedPick = weightedSum + unmodeledProb * tailPick;
-        } else {
-          continue;
-        }
       }
 
       const discrepancy = Math.round((player.currentAdp - impliedPick) * 10) / 10;
@@ -482,38 +504,11 @@ export class DatabaseStorage implements IStorage {
   async synthesizeAdpFromPicks(): Promise<{ playersUpdated: number; totalPlayers: number }> {
     const allPlayers = await db.select().from(players);
     const allPicks = await db.select().from(mockDraftPicks);
-    const allDrafts = await db.select().from(mockDrafts);
-    const allAnalysts = await db.select().from(analysts);
 
-    const analystMap = new Map(allAnalysts.map(a => [a.id, a]));
-    const draftMap = new Map(allDrafts.map(d => [d.id, d]));
-
-    const latestDraftPerSource = new Map<string, number>();
-    const sortedDrafts = [...allDrafts].sort((a, b) => {
-      const da = a.publishedAt ? a.publishedAt.getTime() : 0;
-      const db2 = b.publishedAt ? b.publishedAt.getTime() : 0;
-      return db2 - da;
-    });
-    for (const d of sortedDrafts) {
-      const key = d.sourceKey ?? `analyst_${d.analystId ?? d.id}`;
-      if (!latestDraftPerSource.has(key)) {
-        latestDraftPerSource.set(key, d.id);
-      }
-    }
-    const latestDraftIds = new Set(latestDraftPerSource.values());
-
-    const picksByPlayer = new Map<number, Array<{ pickNumber: number; weight: number }>>();
+    const picksByPlayer = new Map<number, number[]>();
     for (const pick of allPicks) {
-      if (!latestDraftIds.has(pick.mockDraftId)) continue;
-
       if (!picksByPlayer.has(pick.playerId)) picksByPlayer.set(pick.playerId, []);
-      const draft = draftMap.get(pick.mockDraftId);
-      let weight = 1.0;
-      if (draft?.analystId) {
-        const analyst = analystMap.get(draft.analystId);
-        if (analyst?.accuracyWeight) weight = Number(analyst.accuracyWeight);
-      }
-      picksByPlayer.get(pick.playerId)!.push({ pickNumber: pick.pickNumber, weight });
+      picksByPlayer.get(pick.playerId)!.push(pick.pickNumber);
     }
 
     const today = new Date();
@@ -525,13 +520,11 @@ export class DatabaseStorage implements IStorage {
       const picks = picksByPlayer.get(player.id);
       if (!picks || picks.length === 0) continue;
 
-      let totalWeight = 0;
-      let weightedSum = 0;
-      for (const p of picks) {
-        weightedSum += p.pickNumber * p.weight;
-        totalWeight += p.weight;
+      let sum = 0;
+      for (const pickNum of picks) {
+        sum += pickNum;
       }
-      const consensusAdp = totalWeight > 0 ? weightedSum / totalWeight : 0;
+      const consensusAdp = sum / picks.length;
       if (consensusAdp <= 0) continue;
 
       const adpStr = (Math.round(consensusAdp * 10) / 10).toFixed(1);

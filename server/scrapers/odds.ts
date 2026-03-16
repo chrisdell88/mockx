@@ -197,9 +197,8 @@ export async function scrapeOdds(): Promise<{
     }
 
     const requiredBooks = ["DraftKings", "FanDuel", "BetMGM", "Caesars", "ESPN Bet"];
-    const missingBooks = requiredBooks.filter(b => !sportsUsed.length);
-    if (sportsUsed.length === 0) {
-      console.log(`[ODDS] No draft sports found — required bookmakers (${requiredBooks.join(", ")}) may not have NFL Draft markets yet.`);
+    if (totalInserted === 0) {
+      console.log(`[ODDS] No draft odds found — required bookmakers (${requiredBooks.join(", ")}) may not have NFL Draft markets yet.`);
     }
 
     console.log(`[ODDS] Inserted/updated ${totalInserted} odds rows from ${sportsUsed.length} sport(s): ${sportsUsed.join(", ")}`);

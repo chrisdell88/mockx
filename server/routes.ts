@@ -493,23 +493,47 @@ export async function registerRoutes(
     }
   });
 
-  // ─── Daily cron: scrape all sources at 6:00 AM ET ──────────────────────
-  cron.schedule("0 6 * * *", async () => {
+  // ─── Cron endpoint: called by Vercel Cron (or manually) ─────────────────
+  // Protected by CRON_SECRET env var to prevent unauthorized triggers
+  app.post("/api/internal/cron", async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    const authHeader = req.headers["authorization"];
+    if (secret && authHeader !== `Bearer ${secret}`) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     try {
-      console.log("[CRON] Running daily scrape at 6am ET...");
+      console.log("[CRON] Running daily scrape...");
       const results = await runAllScrapers();
       console.log("[CRON] Done:", results.map(r => `${r.sourceKey}=${r.picksFound} picks`).join(", "));
-
-      console.log("[CRON] Synthesizing consensus ADP...");
       await storage.synthesizeAdpFromPicks();
-
-      console.log("[CRON] Fetching sportsbook odds...");
       const { scrapeOdds } = await import("./scrapers/odds");
       await scrapeOdds();
+      res.json({ ok: true, results });
     } catch (err) {
       console.error("[CRON] Daily scrape failed:", err);
+      res.status(500).json({ message: "Cron failed", error: String(err) });
     }
-  }, { timezone: "America/New_York" });
+  });
+
+  // ─── Daily cron: only runs in non-Vercel environments (local / Railway) ──
+  if (!process.env.VERCEL) {
+    cron.schedule("0 6 * * *", async () => {
+      try {
+        console.log("[CRON] Running daily scrape at 6am ET...");
+        const results = await runAllScrapers();
+        console.log("[CRON] Done:", results.map(r => `${r.sourceKey}=${r.picksFound} picks`).join(", "));
+
+        console.log("[CRON] Synthesizing consensus ADP...");
+        await storage.synthesizeAdpFromPicks();
+
+        console.log("[CRON] Fetching sportsbook odds...");
+        const { scrapeOdds } = await import("./scrapers/odds");
+        await scrapeOdds();
+      } catch (err) {
+        console.error("[CRON] Daily scrape failed:", err);
+      }
+    }, { timezone: "America/New_York" });
+  }
 
   return httpServer;
 }

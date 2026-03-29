@@ -169,16 +169,11 @@ export class DatabaseStorage implements IStorage {
 
   async getMockDraftBySourceKeyAndDate(sourceKey: string, dateStr: string): Promise<MockDraft | undefined> {
     // dateStr format: "YYYY-MM-DD"
-    const startOfDay = new Date(dateStr + "T00:00:00.000Z");
-    const endOfDay = new Date(dateStr + "T23:59:59.999Z");
-    const [draft] = await db.select().from(mockDrafts)
-      .where(and(
-        eq(mockDrafts.sourceKey, sourceKey),
-        gte(mockDrafts.publishedAt, startOfDay),
-        lte(mockDrafts.publishedAt, endOfDay),
-      ))
-      .limit(1);
-    return draft;
+    // Use raw SQL to avoid Drizzle ORM timezone conversion issues with timestamp columns
+    const result = await db.execute(
+      sql`SELECT * FROM mock_drafts WHERE source_key = ${sourceKey} AND published_at::date = ${dateStr}::date LIMIT 1`
+    );
+    return result.rows[0] as MockDraft | undefined;
   }
 
   async createMockDraftPick(pick: InsertMockDraftPick): Promise<MockDraftPick> {

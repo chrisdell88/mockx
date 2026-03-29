@@ -22,23 +22,16 @@ export async function scrapeTankathon(players: Player[], urlOverride?: string): 
 
   // Tankathon big board: look for player links /nfl/players/player-name-slug
   // Each entry has a rank number and a player link
-  $("a[href*='/nfl/players/']").each((_i, el) => {
-    const href = $(el).attr("href") || "";
-    // Extract player name from link text (more reliable than URL slug)
-    const linkText = $(el).text().trim();
-    if (!linkText || linkText.length < 3) return;
-    
-    // Look for rank number in the parent row/container
-    const parentRow = $(el).closest("tr, li, div[class*='player'], div[class*='row']");
-    if (parentRow.length === 0) return;
-    
-    const rowText = parentRow.text();
-    const rankMatch = rowText.match(/^\s*(\d+)\s/);
-    const rank = rankMatch ? parseInt(rankMatch[1], 10) : 0;
-    
-    if (rank > 0 && rank <= 64 && linkText.length > 2) {
-      picks.push({ rank, playerName: linkText });
-    }
+  // Each pick row: div.mock-row.nfl contains div.mock-row-pick-number and div.mock-row-player > a
+  $("div.mock-row").each((_i, row) => {
+    const rankText = $(row).find(".mock-row-pick-number").first().text().trim();
+    const rank = parseInt(rankText, 10);
+    if (isNaN(rank) || rank < 1 || rank > 64) return;
+
+    const playerName = $(row).find(".mock-row-name").first().text().trim();
+    if (!playerName || playerName.length < 3) return;
+
+    picks.push({ rank, playerName });
   });
 
   // De-duplicate by rank (keep first occurrence)

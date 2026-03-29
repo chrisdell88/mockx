@@ -4,50 +4,57 @@ import { type Player } from "@shared/schema";
 import { db } from "../db";
 import { players as playersTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
-
-// NFL.com mock draft articles contain prospect headshots via:
-// alt="Player Name" + nearby "god-prospect-headshots/{year}/{uuid}" URL
-// The sequential order of unique player names = pick order
+import * as cheerio from "cheerio";
 
 const HEADSHOT_BASE = "https://static.www.nfl.com/image/private/t_official/f_auto/league/god-prospect-headshots";
 
+// NFL.com mock draft articles use .nfl-is-ranked-player blocks.
+// Each block's last <a> inside .nfl-o-ranked-item__title is the player name.
+// Headshot URLs are embedded in data-srcset attributes.
 function parseNflcomArticle(html: string): Array<{
   playerName: string;
   headshotUrl: string | null;
 }> {
+  const $ = cheerio.load(html);
   const results: Array<{ playerName: string; headshotUrl: string | null }> = [];
   const seen = new Set<string>();
 
-  // Find all instances of alt="Name" near a god-prospect-headshots URL
-  // Scan through the HTML looking for picture elements with prospect headshots
-  const chunks = html.split(/god-prospect-headshots\//);
+  // Primary: ranked-player blocks (Cheerio-based, reliable for all NFL.com mock drafts)
+  $(".nfl-is-ranked-player").each((_i, el) => {
+    const name = $(el).find(".nfl-o-ranked-item__title a").last().text().trim();
+    if (!name || name.length < 3 || seen.has(name)) return;
+    seen.add(name);
 
-  for (let i = 1; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    // Extract year/uuid from start of chunk: "2023/32004d45-..."
-    const uuidMatch = chunk.match(/^([0-9]{4})\/([a-f0-9-]{30,40})/);
-    if (!uuidMatch) continue;
-
-    const year = uuidMatch[1];
-    const uuid = uuidMatch[2];
-    const headshotUrl = `${HEADSHOT_BASE}/${year}/${uuid}`;
-
-    // Look backward in previous chunk for alt="Name"
-    const prevChunk = chunks[i - 1];
-    const altMatch = prevChunk.match(/alt="([^"]+)"[^>]*>?\s*$/);
-    if (!altMatch) {
-      // Try looking forward in current chunk
-      const fwdAlt = chunk.match(/alt="([^"]+)"/);
-      if (!fwdAlt) continue;
-      const name = fwdAlt[1];
-      if (name && name.length > 3 && !name.startsWith("NFL") && !name.includes("Logo") && !seen.has(name)) {
-        seen.add(name);
-        results.push({ playerName: name, headshotUrl });
-      }
-      continue;
+    // Try to find headshot in data-srcset
+    let headshotUrl: string | null = null;
+    const dataSrcset = $(el).find("source[data-srcset]").first().attr("data-srcset") || "";
+    const shotMatch = dataSrcset.match(/god-prospect-headshots\/([0-9]{4})\/([a-f0-9-]{30,40})/);
+    if (shotMatch) {
+      headshotUrl = `${HEADSHOT_BASE}/${shotMatch[1]}/${shotMatch[2]}`;
+    } else {
+      // Fallback: look for headshot in img src
+      $(el).find("img").each((_j, img) => {
+        const src = $(img).attr("src") || $(img).attr("data-src") || "";
+        const m = src.match(/god-prospect-headshots\/([0-9]{4})\/([a-f0-9-]{30,40})/);
+        if (m && !headshotUrl) headshotUrl = `${HEADSHOT_BASE}/${m[1]}/${m[2]}`;
+      });
     }
 
-    const name = altMatch[1];
+    results.push({ playerName: name, headshotUrl });
+  });
+
+  if (results.length > 0) return results;
+
+  // Fallback: legacy alt-text approach for older article formats
+  const chunks = html.split(/god-prospect-headshots\//);
+  for (let i = 1; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const uuidMatch = chunk.match(/^([0-9]{4})\/([a-f0-9-]{30,40})/);
+    if (!uuidMatch) continue;
+    const headshotUrl = `${HEADSHOT_BASE}/${uuidMatch[1]}/${uuidMatch[2]}`;
+    const prevChunk = chunks[i - 1];
+    const altMatch = prevChunk.match(/alt="([^"]+)"[^>]*>?\s*$/);
+    const name = altMatch?.[1] ?? chunk.match(/alt="([^"]+)"/)?.[1];
     if (name && name.length > 3 && !name.startsWith("NFL") && !name.includes("Logo") && !name.includes("Team") && !seen.has(name)) {
       seen.add(name);
       results.push({ playerName: name, headshotUrl });

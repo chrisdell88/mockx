@@ -10,18 +10,23 @@ interface WFPick {
   college: string | null;
 }
 
-// WalterFootball pages use div[data-number] for each pick.
+// WalterFootball Walt pages use div[data-number] for each pick.
 // The <strong><a> link text is "Player Name, Pos, College"
+// WalterFootball Charlie pages use div[id^="mockDraftSlot_"] with <a class="report-link">
 async function parseWalterfootballPage(url: string): Promise<WFPick[]> {
   let html: string;
+  console.log(`[WF] fetching ${url}...`);
   try {
     html = await fetchHtml(url);
-  } catch {
+  } catch (err) {
+    console.error(`[WF] fetch FAILED for ${url}:`, err instanceof Error ? err.message : String(err));
     return [];
   }
+  console.log(`[WF] fetched ${url} (${html.length} bytes)`);
   const $ = cheerio.load(html);
   const picks: WFPick[] = [];
 
+  // Walt format: div[data-number]
   $("div[data-number]").each((_i, el) => {
     const pickNum = parseInt($(el).attr("data-number") ?? "0", 10);
     if (isNaN(pickNum) || pickNum < 1 || pickNum > 300) return;
@@ -52,23 +57,60 @@ async function parseWalterfootballPage(url: string): Promise<WFPick[]> {
     }
   });
 
-  // Fallback: table row approach for older page formats
-  if (picks.length === 0) {
-    $("table tr").each((_i, row) => {
-      const cells = $(row).find("td");
-      if (cells.length < 3) return;
-      const pickNum = parseInt($(cells[0]).text().trim().replace(".", ""), 10);
-      if (isNaN(pickNum) || pickNum < 1 || pickNum > 300) return;
-      const thirdCell = $(cells[2]).text().trim();
-      const colonIdx = thirdCell.indexOf(":");
-      if (colonIdx < 0) return;
-      const parts = thirdCell.slice(colonIdx + 1).trim().split(",").map(s => s.trim());
-      const playerName = parts[0] ?? "";
-      if (playerName.length > 2) {
-        picks.push({ pickNumber: pickNum, playerName, position: parts[1] ?? null, college: parts[2] ?? null });
+  if (picks.length > 0) return picks;
+
+  // Charlie format: div[id^="mockDraftSlot_"] with pick-number span and report-link anchor
+  $("div[id^='mockDraftSlot_']").each((_i, el) => {
+    const slotId = $(el).attr("id") ?? "";
+    const pickNum = parseInt(slotId.replace("mockDraftSlot_", ""), 10);
+    if (isNaN(pickNum) || pickNum < 1 || pickNum > 300) return;
+
+    let playerName = "";
+    let position: string | null = null;
+    let college: string | null = null;
+
+    // Try report-link first (player has a scouting report)
+    $(el).find("a.report-link").each((_j, anchor) => {
+      const text = $(anchor).text().trim();
+      if (text && !text.includes("Scouting Report") && text.length > 2 && !playerName) {
+        playerName = text;
       }
     });
-  }
+
+    // Fallback: no report-link — player name is plain text in the second span of the td
+    // Structure: <span>Team Name:</span><span>Player Name, Pos, College</span>
+    if (!playerName) {
+      const td = $(el).find("td[style*='font-weight:bold']").first();
+      const spans = td.find("span[style*='display:inline-block']");
+      if (spans.length >= 2) {
+        const playerSpanText = $(spans[1]).text().trim();
+        const parts = playerSpanText.split(",").map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 1 && parts[0].length > 2) {
+          playerName = parts[0];
+          position = parts[1] ?? null;
+          college = parts[2] ?? null;
+        }
+      }
+    }
+
+    // Position and college from span context when found via report-link
+    if (playerName && !position) {
+      const td = $(el).find("td[style*='font-weight:bold']").first();
+      const spans = td.find("span[style*='display:inline-block']");
+      if (spans.length >= 2) {
+        const playerSpanText = $(spans[1]).text().trim();
+        const parts = playerSpanText.split(",").map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          position = parts[1] ?? null;
+          college = parts[2] ?? null;
+        }
+      }
+    }
+
+    if (playerName && playerName.length > 2) {
+      picks.push({ pickNumber: pickNum, playerName, position, college });
+    }
+  });
 
   return picks;
 }
@@ -89,18 +131,24 @@ async function runWalterfootball(
     return { sourceKey, picksFound: pickCount, newMockCreated: false, mockDraftId: existing.id };
   }
 
-  // Scrape all pages in parallel
-  const pagePickArrays = await Promise.all(pageUrls.map(u => parseWalterfootballPage(u)));
-  const allPicks: Array<{ pickNumber: number; playerName: string }> = [];
+  // Scrape pages sequentially to avoid rate limiting
+  const allPicks: Array<{ pickNumber: number; playerName: string; position?: string | null; college?: string | null }> = [];
   const seenPickNums = new Set<number>();
-  for (const pagePicks of pagePickArrays) {
+  console.log(`[WF] ${sourceKey}: starting loop over ${pageUrls.length} pages`);
+  for (const url of pageUrls) {
+    console.log(`[WF] ${sourceKey}: about to parse ${url}`);
+    const pagePicks = await parseWalterfootballPage(url);
+    console.log(`[WF] ${sourceKey}: got ${pagePicks.length} picks from ${url}`);
     for (const pick of pagePicks) {
       if (!seenPickNums.has(pick.pickNumber)) {
         seenPickNums.add(pick.pickNumber);
         allPicks.push(pick);
       }
     }
+    // Delay between pages to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
+  console.log(`[WF] ${sourceKey}: loop done, ${allPicks.length} total picks`);
 
   const analyst = await storage.getAnalystBySourceKey(analystSourceKey);
   const mockDraft = await storage.createMockDraft({

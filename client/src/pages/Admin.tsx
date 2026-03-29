@@ -60,7 +60,7 @@ function LoginGate({ onLogin }: { onLogin: () => void }) {
         <CardHeader className="text-center">
           <CardTitle className="text-xl text-white flex items-center justify-center gap-2">
             <Lock className="w-5 h-5 text-emerald-500" />
-            DraftX Admin
+            MockX Admin
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -731,7 +731,7 @@ export default function Admin() {
       <div className="max-w-7xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-white" data-testid="text-admin-title">DraftX Admin</h1>
+            <h1 className="text-2xl font-bold text-white" data-testid="text-admin-title">MockX Admin</h1>
             <p className="text-zinc-500 text-sm">Manage sources, scrapers, and player data</p>
           </div>
           <div className="flex items-center gap-3">

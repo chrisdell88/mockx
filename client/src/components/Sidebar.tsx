@@ -22,7 +22,7 @@ export default function Sidebar() {
         </div>
         <div>
           <h1 className="font-display font-bold text-xl leading-tight text-white tracking-tight">
-            DRAFT<span className="text-primary">X</span>
+            MOCK<span className="text-primary">X</span>
           </h1>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Terminal v1.0</p>
         </div>

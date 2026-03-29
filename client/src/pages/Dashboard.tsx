@@ -450,7 +450,7 @@ export default function Dashboard() {
             <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse shadow-[0_0_8px_hsl(var(--stock-up))]" />
             <p className="text-xs uppercase tracking-widest text-muted-foreground font-mono">Market Open · Live Data</p>
           </div>
-          <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-2">2026 Draft Market</h1>
+          <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-2">2026 NFL Draft</h1>
           <p className="text-muted-foreground max-w-2xl text-sm">
             ADP based on {analysts.length}+ analyst mock drafts. Updated daily from WalterFootball, Tankathon, MDDB, and 25+ individual sources.
           </p>

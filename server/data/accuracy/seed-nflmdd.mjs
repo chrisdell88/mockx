@@ -66,7 +66,7 @@ async function findAnalyst(name) {
 }
 
 async function main() {
-  const years = [2021, 2022, 2023, 2024];
+  const years = [2021, 2022, 2023, 2024, 2025];
   let totalInserted = 0;
   let notFound = [];
 

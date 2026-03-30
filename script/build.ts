@@ -60,6 +60,22 @@ async function buildAll() {
     logLevel: "info",
   });
 
+  // Build Vercel serverless API function — fully bundled so no import resolution needed
+  console.log("building vercel api function...");
+  await rm("api", { recursive: true, force: true });
+  await esbuild({
+    entryPoints: ["server/vercel.ts"],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: "api/index.js",
+    minify: true,
+    external: externals,
+    alias: {
+      "@shared": "./shared",
+    },
+    logLevel: "info",
+  });
 }
 
 buildAll().catch((err) => {

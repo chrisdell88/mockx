@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import { registerRoutes } from "../server/routes";
+import { registerRoutes } from "./routes";
 import { createServer } from "http";
 
 declare module "http" {
@@ -39,7 +39,6 @@ app.use(
   }),
 );
 
-// Error handler must be registered after routes
 let initialized = false;
 const initPromise = registerRoutes(httpServer, app).then(() => {
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -52,7 +51,6 @@ const initPromise = registerRoutes(httpServer, app).then(() => {
   initialized = true;
 }).catch(console.error);
 
-// Vercel expects a default export of the Express app
 export default async function handler(req: any, res: any) {
   if (!initialized) await initPromise;
   return app(req, res);

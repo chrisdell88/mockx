@@ -60,7 +60,7 @@ async function buildAll() {
     logLevel: "info",
   });
 
-  // Build Vercel serverless API function — fully bundled so no import resolution needed
+  // Build Vercel serverless API function — fully self-contained, zero externals
   console.log("building vercel api function...");
   await rm("api", { recursive: true, force: true });
   await esbuild({
@@ -71,7 +71,6 @@ async function buildAll() {
     outfile: "api/index.mjs",
     banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
     minify: true,
-    external: externals,
     alias: {
       "@shared": "./shared",
     },

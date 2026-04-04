@@ -2,9 +2,18 @@ import { Link, useLocation } from "wouter";
 import { Activity, Users, LayoutDashboard, TrendingUp, Radio, Award, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 
 export default function Sidebar() {
   const [location] = useLocation();
+  const { data: recentActivity = [] } = useQuery<{ publishedAt: string | null }[]>({
+    queryKey: ["/api/activity/sidebar-latest"],
+    queryFn: () => fetch("/api/activity?limit=1").then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
+  });
+  const lastUpdatedAt = recentActivity[0]?.publishedAt ?? null;
+  const lastUpdatedLabel = lastUpdatedAt ? format(new Date(lastUpdatedAt), "MMM d, h:mm a") : null;
 
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -61,11 +70,14 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-6 border-t border-white/5 text-xs font-mono text-muted-foreground">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
-          SYSTEM ONLINE
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-[#00e676] text-xs leading-none">●</span>
+          <span className="text-[#00e676]">SYSTEM ONLINE</span>
         </div>
-        <p>MARKET DATA DELAYED BY 15 MIN</p>
+        <p className="mb-1">MARKET DATA DELAYED BY 15 MIN</p>
+        {lastUpdatedLabel && (
+          <p className="text-[10px] text-white/30">Updated {lastUpdatedLabel}</p>
+        )}
       </div>
     </div>
   );

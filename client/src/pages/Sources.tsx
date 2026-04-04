@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiRequest } from "@/lib/queryClient";
-import { 
+import {
   ArrowUpDown, RefreshCw, CheckCircle2, AlertCircle, Clock, Wifi, WifiOff,
-  TrendingUp, Users, Database, ExternalLink, Play, BarChart3
+  TrendingUp, Users, Database, ExternalLink, Play, BarChart3, Lock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -81,13 +81,20 @@ export default function Sources() {
   const [sortBy, setSortBy] = useState<SortKey>("weight");
   const [sortDesc, setSortDesc] = useState(true);
 
+  // Admin check
+  const { data: adminCheck } = useQuery<{ isAdmin: boolean }>({
+    queryKey: ["/api/admin/check"],
+  });
+  const isAdmin = adminCheck?.isAdmin === true;
+
   const { data: analysts = [] } = useQuery<Analyst[]>({
     queryKey: ["/api/analysts"],
   });
 
   const { data: scrapeStatus } = useQuery<ScrapeStatus>({
     queryKey: ["/api/scrape/status"],
-    refetchInterval: 10000, // poll every 10s while scraping
+    refetchInterval: isAdmin ? 10000 : false, // only poll for admins
+    enabled: isAdmin,
   });
 
   const scrapeAllMutation = useMutation({
@@ -148,18 +155,25 @@ export default function Sources() {
             Tracking {analysts.length} sources · {scrapableAnalysts.length} auto-scrapable · Updated daily at 6:00 AM ET
           </p>
         </div>
-        <Button
-          data-testid="button-scrape-all"
-          onClick={() => scrapeAllMutation.mutate()}
-          disabled={scrapeAllMutation.isPending}
-          className="bg-primary hover:bg-primary/80 text-black font-semibold gap-2"
-        >
-          {scrapeAllMutation.isPending ? (
-            <><RefreshCw className="w-4 h-4 animate-spin" />Running Scrapers…</>
-          ) : (
-            <><Play className="w-4 h-4" />Run All Scrapers</>
-          )}
-        </Button>
+        {isAdmin ? (
+          <Button
+            data-testid="button-scrape-all"
+            onClick={() => scrapeAllMutation.mutate()}
+            disabled={scrapeAllMutation.isPending}
+            className="bg-primary hover:bg-primary/80 text-black font-semibold gap-2"
+          >
+            {scrapeAllMutation.isPending ? (
+              <><RefreshCw className="w-4 h-4 animate-spin" />Running Scrapers…</>
+            ) : (
+              <><Play className="w-4 h-4" />Run All Scrapers</>
+            )}
+          </Button>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-white/30 font-mono">
+            <Lock className="w-3 h-3" />
+            Updated daily at 6:00 AM ET
+          </div>
+        )}
       </div>
 
       {/* Stats row */}

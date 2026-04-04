@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
 import { motion } from "framer-motion";
-import { Trophy, Info, ChevronDown, ChevronUp, ToggleLeft, ToggleRight } from "lucide-react";
+import { Trophy, Info, ChevronDown, ChevronUp, ToggleLeft, ToggleRight, HelpCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,7 +24,8 @@ const SITE_META: Record<string, { label: string; color: string; max: number; not
   wf:     { label: "WF",    color: "text-emerald-400", max: 32, note: "0–32 correct player+team matches" },
 };
 
-const YEARS = [2021, 2022, 2023, 2024, 2025];
+// Most recent year first
+const YEARS = [2025, 2024, 2023, 2022, 2021];
 
 // ─── Score cell ───────────────────────────────────────────────────────────────
 function ScoreCell({ score, site }: { score: ScoreRow | undefined; site: string }) {
@@ -33,10 +34,11 @@ function ScoreCell({ score, site }: { score: ScoreRow | undefined; site: string 
   const pct = Math.round((score.rawScore / meta.max) * 100);
   const z = score.zScore ?? 0;
   const color = z >= 1.5 ? "text-emerald-400" : z >= 0.5 ? "text-green-400" : z >= -0.5 ? "text-white/70" : "text-red-400";
+  const rank = score.siteRank;
   return (
-    <td className="px-3 py-2 text-center" title={`Z: ${z.toFixed(2)} | Rank: #${score.siteRank ?? '?'}`}>
+    <td className="px-3 py-2 text-center" title={`Score: ${Math.round(score.rawScore)}/${meta.max} (${pct}%) · Z: ${z.toFixed(2)}`}>
       <span className={cn("text-xs font-mono font-medium", color)}>
-        {Math.round(score.rawScore)}
+        {rank ? `#${rank}` : `${Math.round(score.rawScore)}`}
         <span className="text-white/30 text-[10px]"> ({pct}%)</span>
       </span>
     </td>
@@ -58,21 +60,63 @@ function XBadge({ score, rank }: { score: number | null; rank: number | null }) 
   );
 }
 
+// ─── Ratings Key Modal ────────────────────────────────────────────────────────
+function RatingsKeyModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#0d1117] border border-white/10 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">Column Key</h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3 text-xs">
+          <div className="grid grid-cols-[80px_1fr] gap-x-3 gap-y-2">
+            <span className="font-mono font-bold text-amber-400">THR</span>
+            <span className="text-white/60">The Huddle Report — annual mock draft scorecard tracking correct player + team picks (0–96 pts). Gold standard since 2001.</span>
+            <span className="font-mono font-bold text-blue-400">FP</span>
+            <span className="text-white/60">FantasyPros Mock Draft Accuracy — scores analysts across 4 categories × 32 picks (0–320 pts).</span>
+            <span className="font-mono font-bold text-emerald-400">WF</span>
+            <span className="text-white/60">WalterFootball Mock Draft Results — counts correct player + team matches (0–32).</span>
+            <span className="font-mono font-bold text-white/60">NFLMDD</span>
+            <span className="text-white/60">NFL Mock Draft Database — consensus aggregator of 500–1,500+ individual mock drafts.</span>
+            <span className="font-mono font-bold text-white/60">X Score</span>
+            <span className="text-white/60">Composite accuracy score — Z-score normalized across all available site-years. Higher = more consistently accurate than the field.</span>
+            <span className="font-mono font-bold text-white/60">#Rank</span>
+            <span className="text-white/60">Site-year rank (e.g. #1 = best score that year on that site). Shown when available; raw score shown otherwise.</span>
+            <span className="font-mono font-bold text-white/60">%</span>
+            <span className="text-white/60">Percentage of max possible score for that site-year.</span>
+            <span className="font-mono font-bold text-white/60">Yrs</span>
+            <span className="text-white/60">Number of site-year data points included in the X Score calculation.</span>
+          </div>
+          <div className="pt-3 border-t border-white/8 text-white/30 font-mono text-[10px]">
+            Minimum 2 site-years required for ranking. V-A = equal site weights · V-B = THR counts 1.5×
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Accuracy() {
   const [versionB, setVersionB] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [showRatingsKey, setShowRatingsKey] = useState(false);
 
   const { data: vaData, isLoading: vaLoading } = useQuery<AnalystRow[]>({
     queryKey: ["/api/accuracy/leaderboard"],
     queryFn: () => fetch("/api/accuracy/leaderboard?minYears=2").then(r => r.json()),
   });
 
-  const { data: vbData, isLoading: vbLoading } = useQuery<XBRow[]>({
+  const { data: vbData, isLoading: vbLoading, isError: vbError } = useQuery<XBRow[]>({
     queryKey: ["/api/accuracy/leaderboard/xb"],
-    queryFn: () => fetch("/api/accuracy/leaderboard/xb").then(r => r.json()),
+    queryFn: () => fetch("/api/accuracy/leaderboard/xb").then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }),
     enabled: versionB,
+    retry: 1,
   });
 
   const loading = versionB ? vbLoading : vaLoading;
@@ -97,16 +141,25 @@ export default function Accuracy() {
 
   return (
     <Layout>
+      {showRatingsKey && <RatingsKeyModal onClose={() => setShowRatingsKey(false)} />}
       <div className="p-6 max-w-[1400px] mx-auto">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8 gap-4">
+        <div className="flex items-start justify-between mb-6 gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <Trophy className="w-6 h-6 text-amber-400" />
               <h1 className="text-2xl font-bold text-white tracking-tight">Analyst X Score</h1>
+              <button
+                onClick={() => setShowRatingsKey(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md border border-white/10 text-[11px] text-white/40 hover:text-white/70 hover:border-white/20 transition-all bg-white/3 font-mono"
+                title="Column key"
+              >
+                <HelpCircle className="w-3 h-3" />
+                Ratings Key
+              </button>
             </div>
             <p className="text-sm text-white/50 max-w-xl">
-              Composite accuracy ranking — Z-score normalized across The Huddle Report, FantasyPros, and WalterFootball (2021–2025).
+              Composite accuracy ranking — Z-score normalized across The Huddle Report (THR), FantasyPros (FP), and WalterFootball (WF), 2021–2025.
               Higher = more consistently accurate than the field. Min 2 site-years required.
             </p>
           </div>
@@ -129,6 +182,16 @@ export default function Accuracy() {
               {versionB ? "THR scores weighted 1.5×" : "All sites weighted equally"}
             </p>
           </div>
+        </div>
+
+        {/* Abbreviation legend */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-5 text-[11px] font-mono text-white/40">
+          <span className="text-white/25 uppercase tracking-wider text-[10px]">Key:</span>
+          <span><span className="text-amber-400 font-bold">THR</span> = The Huddle Report</span>
+          <span><span className="text-blue-400 font-bold">FP</span> = FantasyPros</span>
+          <span><span className="text-emerald-400 font-bold">WF</span> = WalterFootball</span>
+          <span><span className="text-white/50 font-bold">NFLMDD</span> = NFL Mock Draft Database</span>
+          <span className="text-white/25">· Cells show site rank (#1 = best) with % of max score</span>
         </div>
 
         {/* Site legend */}
@@ -182,8 +245,12 @@ export default function Accuracy() {
         )}
 
         {/* Main table */}
-        {loading ? (
+        {versionB && vbError ? (
+          <div className="flex items-center justify-center py-20 text-red-400/60 text-sm">Failed to load V-B data — please try again.</div>
+        ) : loading ? (
           <div className="flex items-center justify-center py-20 text-white/30 text-sm">Computing X Scores...</div>
+        ) : rows.length === 0 ? (
+          <div className="flex items-center justify-center py-20 text-white/30 text-sm">No data available.</div>
         ) : (
           <div className="bg-card border border-white/8 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">

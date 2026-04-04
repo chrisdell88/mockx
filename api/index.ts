@@ -391,8 +391,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (path === "/activity" || path === "/activity/") {
-      const result = await pool.query("SELECT * FROM mock_drafts ORDER BY id DESC LIMIT 30");
-      return res.json(result.rows);
+      const limitParam = url.searchParams.get("limit");
+      const limit = limitParam ? Math.min(parseInt(limitParam) || 30, 200) : 30;
+      const boardTypeParam = url.searchParams.get("boardType");
+      let q = "SELECT id, source_name, source_key, board_type, published_at, url FROM mock_drafts";
+      const qParams: any[] = [];
+      if (boardTypeParam) { q += " WHERE board_type = $1"; qParams.push(boardTypeParam); }
+      q += ` ORDER BY published_at DESC NULLS LAST LIMIT ${limit}`;
+      const result = await pool.query(q, qParams);
+      return res.json(result.rows.map((r: any) => ({
+        id: r.id,
+        sourceName: r.source_name,
+        shortName: r.source_key,
+        boardType: r.board_type,
+        publishedAt: r.published_at,
+        url: r.url,
+      })));
     }
 
     if (path === "/scrape/status" || path === "/scrape/status/") {

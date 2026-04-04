@@ -1,4 +1,4 @@
-import { useRoute } from "wouter";
+import { useRoute, useParams } from "wouter";
 import { usePlayer, usePlayerTrends, usePlayerRankings } from "@/hooks/use-players";
 import { useQuery } from "@tanstack/react-query";
 import Layout from "@/components/Layout";
@@ -145,7 +145,8 @@ function ChartWindowTabs({
 }
 
 export default function PlayerDetail() {
-  const [, params] = useRoute("/players/:id");
+  // useParams is the correct wouter v3 API for components rendered inside <Route>
+  const params = useParams<{ id: string }>();
   const id = parseInt(params?.id || "0");
 
   const { data: player, isLoading: playerLoading } = usePlayer(id);

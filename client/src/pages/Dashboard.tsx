@@ -627,9 +627,13 @@ export default function Dashboard() {
         <header>
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse shadow-[0_0_8px_hsl(var(--stock-up))]" />
+            <span className="text-[10px] text-[#00e676] font-bold">●</span>
             <p className="text-xs uppercase tracking-widest text-muted-foreground font-mono">
-              Market Open · Live Data{lastUpdatedLabel ? ` · Updated ${lastUpdatedLabel}` : ""}
+              System Online · 2026 NFL Draft
             </p>
+            {lastUpdatedLabel && (
+              <span className="text-xs text-white/40 font-mono">· Updated {lastUpdatedLabel}</span>
+            )}
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-2">2026 NFL Draft</h1>
           <p className="text-muted-foreground max-w-2xl text-sm">
@@ -925,6 +929,23 @@ export default function Dashboard() {
                 <PlayerCard player={player} index={i} />
               </motion.div>
             ))}
+          </div>
+        </div>
+
+        {/* ── Page Footer — System Status + Timestamp ──────────────── */}
+        <div className="mt-12 pt-6 border-t border-white/5 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[#00e676] font-bold">●</span>
+            <span className="text-xs text-white/40 font-mono uppercase tracking-widest">System Online</span>
+            {lastUpdatedLabel && (
+              <span className="text-[10px] text-white/25 font-mono ml-2">
+                · Last updated {lastUpdatedLabel}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] text-white/20 font-mono">2026 NFL Draft · Apr 24, 2026</span>
+            <span className="text-[10px] text-white/20 font-mono">mockx.co</span>
           </div>
         </div>
       </motion.div>

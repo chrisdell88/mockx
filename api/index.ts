@@ -236,17 +236,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           zScore: row.z_score !== null ? Number(row.z_score) : null,
         });
       }
-      const rows = analysts_result.rows.map((a: any) => ({
-        id: a.id,
-        name: a.name,
-        outlet: a.outlet,
-        xScore: a.x_score !== null ? Number(a.x_score) : null,
-        xScoreRank: a.x_score_rank,
-        xScoreSitesCount: a.x_score_sites_count,
-        huddleScore5Year: a.huddle_score_5_year,
-        scores: scoresByAnalyst[a.id] ?? [],
-      })).filter((a: any) => a.xScore !== null && (a.xScoreSitesCount ?? 0) >= minYears);
-      return res.json(rows);
+      // New weighted formula: THR=3x, FP=2x, WF=1x · 2025=3x, 2024=2x, 2023=1.5x, 2022=1x, 2021=0.75x
+      const SITE_W: Record<string, number> = { thr: 3, fp: 2, wf: 1 };
+      const YEAR_W: Record<number, number> = { 2025: 3, 2024: 2, 2023: 1.5, 2022: 1, 2021: 0.75 };
+      const withWeighted = analysts_result.rows.map((a: any) => {
+        const scores = scoresByAnalyst[a.id] ?? [];
+        const zEntries = scores.filter((s: any) => s.zScore !== null);
+        let wSum = 0, wTotal = 0;
+        for (const s of zEntries) {
+          const w = (SITE_W[s.site] ?? 1) * (YEAR_W[s.year] ?? 1);
+          wSum += s.zScore * w;
+          wTotal += w;
+        }
+        const xScoreWeighted = zEntries.length >= 2 && wTotal > 0 ? wSum / wTotal : null;
+        return {
+          id: a.id, name: a.name, outlet: a.outlet,
+          xScore: xScoreWeighted,  // use weighted score as primary
+          xScoreRank: null,         // computed below after sort
+          xScoreSitesCount: zEntries.length,
+          huddleScore5Year: a.huddle_score_5_year,
+          scores,
+        };
+      })
+      .filter((a: any) => a.xScore !== null && (a.xScoreSitesCount ?? 0) >= minYears)
+      .sort((a: any, b: any) => (b.xScore ?? -99) - (a.xScore ?? -99))
+      .map((a: any, i: number) => ({ ...a, xScoreRank: i + 1 }));
+      return res.json(withWeighted);
     }
 
     if (path === "/adp-windows" || path === "/adp-windows/") {

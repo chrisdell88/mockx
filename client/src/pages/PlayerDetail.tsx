@@ -433,6 +433,30 @@ export default function PlayerDetail() {
             </div>
           )}
 
+          {/* Player Profiler Scouting */}
+          {(player.comparablePlayer || player.playerProfilerUrl) && (
+            <div className="glass-card rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Award className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold text-white text-sm uppercase tracking-wider font-mono">Player Profiler</h3>
+              </div>
+              <div className="space-y-2">
+                {player.comparablePlayer && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted-foreground font-mono">Comparable</span>
+                    <span className="font-mono font-bold text-amber-400 text-sm">{player.comparablePlayer}</span>
+                  </div>
+                )}
+                {player.playerProfilerUrl && (
+                  <a href={player.playerProfilerUrl} target="_blank" rel="noopener noreferrer"
+                     className="block text-center text-[10px] text-primary/60 hover:text-primary font-mono mt-2 transition-colors">
+                    View on PlayerProfiler →
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Analyst Consensus — with Median + Spread */}
           {sortedRankings.length >= 2 && (
             <div className="glass-card rounded-2xl p-5" data-testid="consensus-card">

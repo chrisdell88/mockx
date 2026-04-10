@@ -94,8 +94,8 @@ const SOURCE_COLORS: string[] = [
 
 function getShortName(sourceKey: string | null | undefined, sourceName: string): string {
   if (sourceKey && SOURCE_SHORT[sourceKey]) return SOURCE_SHORT[sourceKey];
-  const nameParts = sourceName.split(/[\s(—]/);
-  return nameParts[0].slice(0, 8);
+  // Show full source name for unrecognized sources — no truncation
+  return sourceName;
 }
 
 // ── Position badge color ───────────────────────────────────────────────────
@@ -159,8 +159,9 @@ export default function PlayerDetail() {
 
   // ── Chart + window state ──────────────────────────────────────────────────
   const [chartWindow, setChartWindow] = useState<ChartWindow>("all");
-  const [mockWindow, setMockWindow] = useState<ChartWindow>("all");
-  const [divWindow, setDivWindow] = useState<ChartWindow>("all");
+  const [mockWindow, setMockWindow] = useState<ChartWindow>("7d");
+  const [divWindow, setDivWindow] = useState<ChartWindow>("30d");
+  const [consensusWindow, setConsensusWindow] = useState<ChartWindow>("30d");
 
   // ── ADP trend chart data — always starts from Feb 1, 2026 ────────────────
   const allAdpChartData = useMemo(() => {
@@ -268,24 +269,27 @@ export default function PlayerDetail() {
     return divRankings.reduce((s, r) => s + r.pickNumber, 0) / divRankings.length;
   }, [divRankings]);
 
-  // High / Low consensus from all rankings
-  const highOn = sortedRankings.length > 0 ? sortedRankings[0] : null;
-  const lowOn  = sortedRankings.length > 0 ? sortedRankings[sortedRankings.length - 1] : null;
+  // ── Consensus card: windowed rankings (default 30d) ───────────────────────
+  const consensusRankings = useMemo(() => filterByWindow(sortedRankings, consensusWindow), [sortedRankings, consensusWindow]);
 
-  // ── Median pick ───────────────────────────────────────────────────────────
+  // High / Low from windowed consensus rankings
+  const highOn = consensusRankings.length > 0 ? consensusRankings[0] : null;
+  const lowOn  = consensusRankings.length > 0 ? consensusRankings[consensusRankings.length - 1] : null;
+
+  // ── Median pick (windowed) ────────────────────────────────────────────────
   const medianPick = useMemo(() => {
-    if (sortedRankings.length === 0) return null;
-    const picks = sortedRankings.map(r => r.pickNumber);
+    if (consensusRankings.length === 0) return null;
+    const picks = consensusRankings.map(r => r.pickNumber);
     const mid = Math.floor(picks.length / 2);
     if (picks.length % 2 === 0) {
       return Math.round(((picks[mid - 1] + picks[mid]) / 2) * 10) / 10;
     }
     return picks[mid];
-  }, [sortedRankings]);
+  }, [consensusRankings]);
 
-  // Average from all rankings (shown in consensus card)
-  const avgPick = sortedRankings.length > 0
-    ? Math.round((sortedRankings.reduce((s, r) => s + r.pickNumber, 0) / sortedRankings.length) * 10) / 10
+  // Average pick (windowed)
+  const avgPick = consensusRankings.length > 0
+    ? Math.round((consensusRankings.reduce((s, r) => s + r.pickNumber, 0) / consensusRankings.length) * 10) / 10
     : null;
 
   // ── Position rank display: "2nd / 18 WRs" ────────────────────────────────
@@ -359,7 +363,7 @@ export default function PlayerDetail() {
             </div>
 
             {/* Key Stats Row */}
-            <div className="grid grid-cols-3 gap-2 mt-6">
+            <div className={`grid gap-2 mt-6 ${player.rasScore ? "grid-cols-3" : "grid-cols-2"}`}>
               <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex flex-col items-center text-center">
                 <p className="text-[10px] text-muted-foreground uppercase font-mono mb-1">ADP</p>
                 <p className="font-bold text-white font-mono text-lg" data-testid="text-current-adp">
@@ -371,13 +375,15 @@ export default function PlayerDetail() {
                   </span>
                 )}
               </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex flex-col items-center text-center">
-                <p className="text-[10px] text-muted-foreground uppercase font-mono mb-1">RAS</p>
-                <p className="font-bold font-mono text-lg" style={{ color: player.rasScore ? (Number(player.rasScore) >= 9 ? "#4ade80" : Number(player.rasScore) >= 7 ? "#f59e0b" : "#94a3b8") : "#94a3b8" }}
-                   data-testid="text-ras-score">
-                  {player.rasScore ? Number(player.rasScore).toFixed(2) : "–"}
-                </p>
-              </div>
+              {player.rasScore && (
+                <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex flex-col items-center text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-mono mb-1">RAS</p>
+                  <p className="font-bold font-mono text-lg" style={{ color: Number(player.rasScore) >= 9 ? "#4ade80" : Number(player.rasScore) >= 7 ? "#f59e0b" : "#94a3b8" }}
+                     data-testid="text-ras-score">
+                    {Number(player.rasScore).toFixed(2)}
+                  </p>
+                </div>
+              )}
               {/* Pos Rank: "2nd / 18 WRs" format */}
               <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex flex-col items-center text-center">
                 <p className="text-[10px] text-muted-foreground uppercase font-mono mb-1">Pos Rank</p>
@@ -461,10 +467,16 @@ export default function PlayerDetail() {
           {/* Analyst Consensus — with Median + Spread */}
           {sortedRankings.length >= 2 && (
             <div className="glass-card rounded-2xl p-5" data-testid="consensus-card">
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold text-white text-sm uppercase tracking-wider font-mono">Analyst Consensus</h3>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-white text-sm uppercase tracking-wider font-mono">Analyst Consensus</h3>
+                </div>
+                <ChartWindowTabs value={consensusWindow} onChange={setConsensusWindow} />
               </div>
+              {consensusRankings.length === 0 ? (
+                <p className="text-xs text-muted-foreground font-mono text-center py-3">No analyst picks in this window</p>
+              ) : (
               <div className="space-y-3">
                 {avgPick && (
                   <div className="flex justify-between items-center">
@@ -509,6 +521,7 @@ export default function PlayerDetail() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
 
@@ -609,7 +622,7 @@ export default function PlayerDetail() {
                 <ChartWindowTabs value={chartWindow} onChange={setChartWindow} />
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground font-mono mb-3">Feb 1, 2026 → Today · GTM EDP</p>
+            <p className="text-[10px] text-muted-foreground font-mono mb-3">Aggregate expert consensus · Feb 1, 2026 → Today</p>
 
             {trendsLoading ? (
               <div className="h-[240px] flex items-center justify-center">
@@ -634,7 +647,7 @@ export default function PlayerDetail() {
                            tickMargin={8} />
                     <YAxis reversed={true} stroke="rgba(255,255,255,0.2)"
                            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11, fontFamily: "var(--font-mono)" }}
-                           tickFormatter={v => `#${v}`} domain={["dataMin - 1", "dataMax + 1"]} />
+                           tickFormatter={v => `#${Math.round(Number(v))}`} domain={["dataMin - 1", "dataMax + 1"]} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "rgba(255,255,255,0.12)", borderRadius: "8px", color: "white", fontFamily: "var(--font-mono)", fontSize: "12px" }}
                       formatter={(v: any) => [`#${Number(v).toFixed(1)}`, "ADP"]}
@@ -654,7 +667,7 @@ export default function PlayerDetail() {
           </div>
 
           {/* Analyst Divergence — dot plot, bullish=green, bearish=red */}
-          {!rankingsLoading && divRankings.length > 1 && (
+          {!rankingsLoading && sortedRankings.length > 1 && (
             <div className="glass-card rounded-2xl p-6" data-testid="drafter-comparison-card">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <div className="flex items-center gap-2">
@@ -664,6 +677,10 @@ export default function PlayerDetail() {
                 <ChartWindowTabs value={divWindow} onChange={setDivWindow} />
               </div>
 
+              {divRankings.length <= 1 ? (
+                <p className="text-xs text-muted-foreground font-mono text-center py-4">No analyst picks in this window</p>
+              ) : (
+              <>
               {divAvg !== null && (
                 <p className="text-xs text-muted-foreground font-mono mb-4">
                   Consensus: <span className="text-white font-bold">#{divAvg.toFixed(1)}</span>
@@ -730,8 +747,7 @@ export default function PlayerDetail() {
                 );
               })()}
 
-              {divRankings.length === 0 && (
-                <p className="text-xs text-muted-foreground font-mono text-center py-4">No analyst data in this window</p>
+              </>
               )}
             </div>
           )}

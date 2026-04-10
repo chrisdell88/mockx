@@ -288,6 +288,15 @@ export default function PlayerDetail() {
     ? Math.round((sortedRankings.reduce((s, r) => s + r.pickNumber, 0) / sortedRankings.length) * 10) / 10
     : null;
 
+  // ── Position rank display: "2nd / 18 WRs" ────────────────────────────────
+  // MUST be before the early return — hooks cannot be called after a conditional return
+  const posRankDisplay = useMemo(() => {
+    if (!posRank?.rank || !posRank?.total || !posRank?.position) return null;
+    const r = posRank.rank;
+    const suffix = r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th";
+    return { label: `${r}${suffix} / ${posRank.total} ${posRank.position}s`, rank: r, total: posRank.total };
+  }, [posRank]);
+
   if (playerLoading || !player) {
     return (
       <Layout>
@@ -308,14 +317,6 @@ export default function PlayerDetail() {
     { label: "Shuttle",    value: player.shuttleRun   ? `${Number(player.shuttleRun).toFixed(2)}s`   : null },
     { label: "Broad Jump", value: player.broadJump    ? `${player.broadJump}"`                       : null },
   ].filter(s => s.value !== null);
-
-  // ── Position rank display: "2nd / 18 WRs" ────────────────────────────────
-  const posRankDisplay = useMemo(() => {
-    if (!posRank?.rank || !posRank?.total || !posRank?.position) return null;
-    const r = posRank.rank;
-    const suffix = r === 1 ? "st" : r === 2 ? "nd" : r === 3 ? "rd" : "th";
-    return { label: `${r}${suffix} / ${posRank.total} ${posRank.position}s`, rank: r, total: posRank.total };
-  }, [posRank]);
 
   return (
     <Layout>

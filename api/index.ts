@@ -96,6 +96,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         broadJump: r.broad_jump ?? null,
         coneDrill: r.cone_drill !== null ? Number(r.cone_drill) : null,
         shuttleRun: r.shuttle_run !== null ? Number(r.shuttle_run) : null,
+        comparablePlayer: r.comparable_player ?? null,
+        dominatorRating: r.dominator_rating !== null ? Number(r.dominator_rating) : null,
+        breakoutAge: r.breakout_age !== null ? Number(r.breakout_age) : null,
+        playerProfilerUrl: r.player_profiler_url ?? null,
       });
     }
 

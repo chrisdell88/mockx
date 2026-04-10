@@ -17,6 +17,10 @@ export const players = pgTable("players", {
   coneDrill: numeric("cone_drill"),
   shuttleRun: numeric("shuttle_run"),
   imageUrl: text("image_url"),
+  comparablePlayer: text("comparable_player"),
+  dominatorRating: numeric("dominator_rating"),
+  breakoutAge: numeric("breakout_age"),
+  playerProfilerUrl: text("player_profiler_url"),
 });
 
 // Analyst accuracy data sourced from The Huddle Report, FantasyPros, WalterFootball, NFLMDD

@@ -143,8 +143,6 @@ export default function Players() {
                 >
                   <span>{pos}</span>
                   <span className={cn("font-bold", isActive ? "" : "text-muted-foreground/60")}>{count}</span>
-                  {heat === "rising"  && <span className="text-emerald-400 text-[9px]">▲</span>}
-                  {heat === "falling" && <span className="text-red-400 text-[9px]">▼</span>}
                 </button>
               );
             })}

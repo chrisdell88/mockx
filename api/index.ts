@@ -460,6 +460,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    if (path === "/internal/cron" || path === "/internal/cron/") {
+      const secret = process.env.CRON_SECRET;
+      const authHeader = req.headers["authorization"];
+      if (secret && authHeader !== `Bearer ${secret}`) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const { runAllScrapers } = await import("../server/scrapers/index");
+      const { storage } = await import("../server/storage");
+      const { scrapeOdds } = await import("../server/scrapers/odds");
+      const results = await runAllScrapers();
+      await storage.synthesizeAdpFromPicks();
+      await scrapeOdds();
+      return res.json({ ok: true, results });
+    }
+
     // Health check
     if (path === "/health" || path === "/" || path === "") {
       const dbUrl = process.env.DATABASE_URL || "NOT SET";

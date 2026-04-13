@@ -30,6 +30,7 @@ function Router() {
       <Route path="/sources">
         {() => <Layout><Sources /></Layout>}
       </Route>
+      <Route path="/prospects">{() => { window.location.replace("/players"); return null; }}</Route>
       <Route path="/admin" component={Admin} />
       <Route path="/pipeline" component={MockDrafts} />
       <Route component={NotFound} />

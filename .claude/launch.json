@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "mockx-dev",
-      "runtimeExecutable": "/opt/homebrew/bin/npm",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 5000
+      "port": 3000
     }
   ]
 }

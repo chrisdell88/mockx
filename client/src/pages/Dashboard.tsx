@@ -606,7 +606,7 @@ export default function Dashboard() {
   const [activeWindow, setActiveWindow] = useState<Window>("30d");
 
   const sorted = [...(players ?? [])].sort((a, b) => (a.currentAdp ?? 99) - (b.currentAdp ?? 99));
-  const topProspects = sorted.slice(0, 6);
+  const topProspects = sorted.slice(0, 32);
 
   // Window-aware movers from /api/adp-windows
   const getChange = (p: AdpWindowPlayer): number | null => {
@@ -614,8 +614,12 @@ export default function Dashboard() {
   };
 
   const withChange = windowData.filter(p => getChange(p) !== null && Math.abs(getChange(p)!) > 0.1);
-  const topRisers = [...withChange].filter(p => (getChange(p) ?? 0) > 0).sort((a, b) => (getChange(b) ?? 0) - (getChange(a) ?? 0)).slice(0, 5);
-  const topFallers = [...withChange].filter(p => (getChange(p) ?? 0) < 0).sort((a, b) => (getChange(a) ?? 0) - (getChange(b) ?? 0)).slice(0, 5);
+  const allRisers = [...withChange].filter(p => (getChange(p) ?? 0) > 0).sort((a, b) => (getChange(b) ?? 0) - (getChange(a) ?? 0));
+  const allFallers = [...withChange].filter(p => (getChange(p) ?? 0) < 0).sort((a, b) => (getChange(a) ?? 0) - (getChange(b) ?? 0));
+  const [showAllRisers, setShowAllRisers] = useState(false);
+  const [showAllFallers, setShowAllFallers] = useState(false);
+  const topRisers = showAllRisers ? allRisers : allRisers.slice(0, 5);
+  const topFallers = showAllFallers ? allFallers : allFallers.slice(0, 5);
 
   const totalRising = (players ?? []).filter(p => (p.adpChange ?? 0) > 0.2).length;
   const totalFalling = (players ?? []).filter(p => (p.adpChange ?? 0) < -0.2).length;
@@ -659,14 +663,14 @@ export default function Dashboard() {
           </div>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-white mb-2">2026 NFL Draft</h1>
           <p className="text-muted-foreground max-w-2xl text-sm">
-            Consensus ADP based on {mockDraftCount > 0 ? mockDraftCount : analysts.length} mock drafts, accuracy-weighted using The Huddle Report, FantasyPros & WalterFootball.
+            Consensus ADP based on {mockDraftCount > 0 ? mockDraftCount : analysts.length} compiled mock drafts, accuracy-weighted using The Huddle Report, FantasyPros, WalterFootball & NFL Mock Draft Database.
           </p>
         </header>
 
         {/* Stats Strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Prospects Tracked", value: players?.length ?? 0, icon: Users, color: "text-primary", href: "/prospects" as string | null },
+            { label: "Prospects Tracked", value: players?.length ?? 0, icon: Users, color: "text-primary", href: "/players" as string | null },
             { label: "Analyst Sources", value: analysts.length, icon: BarChart3, color: "text-blue-400", href: "/accuracy" as string | null },
             { label: "Rising (7d)", value: totalRising, icon: TrendingUp, color: "text-stock-up", href: null },
             { label: "Falling (7d)", value: totalFalling, icon: TrendingDown, color: "text-stock-down", href: null },
@@ -715,11 +719,18 @@ export default function Dashboard() {
                 </span>
               </div>
               {!windowLoading && topRisers.length > 0 ? (
-                <div className="space-y-2">
-                  {topRisers.map((player, i) => (
-                    <MoverRow key={player.id} player={player} rank={i + 1} type="up" change={getChange(player) ?? 0} />
-                  ))}
-                </div>
+                <>
+                  <div className="space-y-2">
+                    {topRisers.map((player, i) => (
+                      <MoverRow key={player.id} player={player} rank={i + 1} type="up" change={getChange(player) ?? 0} />
+                    ))}
+                  </div>
+                  {allRisers.length > 5 && (
+                    <button onClick={() => setShowAllRisers(v => !v)} className="mt-3 w-full text-xs text-white/40 hover:text-white font-mono flex items-center justify-center gap-1 transition-colors">
+                      {showAllRisers ? <><ChevronUp className="w-3 h-3" /> Show less</> : <><ChevronDown className="w-3 h-3" /> See all {allRisers.length} risers</>}
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Activity className="w-8 h-8 mx-auto mb-2 opacity-20" />
@@ -739,11 +750,18 @@ export default function Dashboard() {
                 </span>
               </div>
               {!windowLoading && topFallers.length > 0 ? (
-                <div className="space-y-2">
-                  {topFallers.map((player, i) => (
-                    <MoverRow key={player.id} player={player} rank={i + 1} type="down" change={getChange(player) ?? 0} />
-                  ))}
-                </div>
+                <>
+                  <div className="space-y-2">
+                    {topFallers.map((player, i) => (
+                      <MoverRow key={player.id} player={player} rank={i + 1} type="down" change={getChange(player) ?? 0} />
+                    ))}
+                  </div>
+                  {allFallers.length > 5 && (
+                    <button onClick={() => setShowAllFallers(v => !v)} className="mt-3 w-full text-xs text-white/40 hover:text-white font-mono flex items-center justify-center gap-1 transition-colors">
+                      {showAllFallers ? <><ChevronUp className="w-3 h-3" /> Show less</> : <><ChevronDown className="w-3 h-3" /> See all {allFallers.length} fallers</>}
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Activity className="w-8 h-8 mx-auto mb-2 opacity-20" />
@@ -893,21 +911,7 @@ export default function Dashboard() {
           ) : null}
         </div>
 
-        {/* ── Position Breakdown + Source Coverage + X Score ─────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-3">
-            <h2 className="text-sm uppercase tracking-widest text-muted-foreground font-mono flex items-center gap-2">
-              <Zap className="w-3 h-3 text-primary" />Position Breakdown
-            </h2>
-            <PositionSummary players={players ?? []} />
-          </div>
-          <div>
-            <h2 className="text-sm uppercase tracking-widest text-muted-foreground font-mono flex items-center gap-2 mb-3">
-              <Wifi className="w-3 h-3 text-stock-up" />Live Sources
-            </h2>
-            <SourceCoverage analysts={analysts} />
-          </div>
-        </div>
+        {/* Position Breakdown + Source Coverage removed — redundant with Prospects page */}
 
         {/* ── Analyst X Score Leaders ─────────────────────────────────────── */}
         {xLeaders.length > 0 && (
@@ -916,10 +920,10 @@ export default function Dashboard() {
             <div className="bg-card/30 border border-white/5 rounded-2xl p-5 flex flex-col justify-center">
               <p className="text-[11px] uppercase tracking-widest text-white/30 font-mono mb-3">About X Score</p>
               <p className="text-sm text-white/60 leading-relaxed mb-4">
-                X Score is a Z-score normalized composite accuracy ranking across three independent tracking sites — The Huddle Report, FantasyPros, and WalterFootball — spanning 2021–2025. Higher is better. Must have 2025 data to qualify.
+                X Score is a composite accuracy ranking normalized across four independent tracking sites — The Huddle Report, FantasyPros, WalterFootball, and NFL Mock Draft Database — spanning 2021–2025. Must have 2025 data to qualify.
               </p>
               <div className="flex flex-wrap gap-2">
-                {["The Huddle Report", "FantasyPros", "WalterFootball"].map(s => (
+                {["The Huddle Report", "FantasyPros", "WalterFootball", "NFLMDD"].map(s => (
                   <span key={s} className="text-[10px] font-mono px-2 py-1 bg-white/5 border border-white/8 rounded text-white/50">{s}</span>
                 ))}
               </div>
@@ -972,32 +976,28 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* ── Floating Activity Feed Button (admin only) ───────────────── */}
-      {isAdmin && (
-        <button
-          onClick={() => setActivityOpen(true)}
-          data-testid="btn-activity-feed"
-          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-3 bg-primary text-black rounded-full shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all font-semibold text-sm hover:scale-105"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="hidden sm:inline">Activity</span>
-          {activityItems.length > 0 && (
-            <span className="flex h-5 w-5 items-center justify-center bg-black/20 rounded-full text-[10px] font-bold">
-              {activityItems.length}
-            </span>
-          )}
-        </button>
-      )}
+      {/* ── Floating Activity Feed Button ───────────────── */}
+      <button
+        onClick={() => setActivityOpen(true)}
+        data-testid="btn-activity-feed"
+        className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-3 bg-primary text-black rounded-full shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all font-semibold text-sm hover:scale-105"
+      >
+        <Bell className="w-4 h-4" />
+        <span className="hidden sm:inline">Activity</span>
+        {activityItems.length > 0 && (
+          <span className="flex h-5 w-5 items-center justify-center bg-black/20 rounded-full text-[10px] font-bold">
+            {activityItems.length}
+          </span>
+        )}
+      </button>
 
-      {/* ── Activity Drawer (admin only) ──────────────────────────────── */}
-      {isAdmin && (
-        <ActivityDrawer
-          open={activityOpen}
-          onClose={() => setActivityOpen(false)}
-          items={activityItems}
-          loading={activityLoading}
-        />
-      )}
+      {/* ── Activity Drawer ──────────────────────────────── */}
+      <ActivityDrawer
+        open={activityOpen}
+        onClose={() => setActivityOpen(false)}
+        items={activityItems}
+        loading={activityLoading}
+      />
     </Layout>
   );
 }

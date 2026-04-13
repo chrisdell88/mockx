@@ -20,6 +20,7 @@ const SITE_META: Record<string, { label: string; color: string; max: number; not
   thr:    { label: "THR",   color: "text-amber-400",   max: 96,  note: "0–96 pts (1pt=player, 2pt=player+team)" },
   fp:     { label: "FP",    color: "text-blue-400",    max: 320, note: "0–320 pts (4 categories × 32 picks)" },
   wf:     { label: "WF",    color: "text-emerald-400", max: 32,  note: "0–32 correct player+team matches" },
+  nflmdd: { label: "MDDB",  color: "text-violet-400",  max: 100, note: "NFL Mock Draft Database accuracy %" },
 };
 
 // Most recent year first
@@ -284,7 +285,6 @@ export default function Accuracy() {
                     <SortTh col="xScoreRank" label="X Score"   currentKey={sortKey} dir={sortDir} onSort={handleSort}
                       className="text-center"
                     />
-                    <th className="px-4 py-2.5 text-center text-[11px] font-mono text-white/40 uppercase tracking-wider">Yrs</th>
                     {/* THR year columns */}
                     {YEARS.map(yr => (
                       <th key={`thr-${yr}`} className="px-3 py-2.5 text-center text-[11px] font-mono text-amber-400/50 uppercase tracking-wider whitespace-nowrap">
@@ -301,6 +301,12 @@ export default function Accuracy() {
                     {YEARS.map(yr => (
                       <th key={`wf-${yr}`} className="px-3 py-2.5 text-center text-[11px] font-mono text-emerald-400/50 uppercase tracking-wider whitespace-nowrap">
                         WF {String(yr).slice(2)}
+                      </th>
+                    ))}
+                    {/* MDDB year columns */}
+                    {YEARS.map(yr => (
+                      <th key={`nflmdd-${yr}`} className="px-3 py-2.5 text-center text-[11px] font-mono text-violet-400/50 uppercase tracking-wider whitespace-nowrap">
+                        MDDB {String(yr).slice(2)}
                       </th>
                     ))}
                   </tr>
@@ -337,9 +343,6 @@ export default function Accuracy() {
                         <td className="px-4 py-3 text-center">
                           <XBadge score={row.xScore} rank={row.xScoreRank} />
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="text-xs font-mono text-white/40">{row.siteYears}</span>
-                        </td>
                         {/* THR scores */}
                         {YEARS.map(yr => (
                           <ScoreCell key={`thr-${yr}`} score={getScore(va, 'thr', yr)} site="thr" />
@@ -351,6 +354,10 @@ export default function Accuracy() {
                         {/* WF scores */}
                         {YEARS.map(yr => (
                           <ScoreCell key={`wf-${yr}`} score={getScore(va, 'wf', yr)} site="wf" />
+                        ))}
+                        {/* MDDB scores */}
+                        {YEARS.map(yr => (
+                          <ScoreCell key={`nflmdd-${yr}`} score={getScore(va, 'nflmdd', yr)} site="nflmdd" />
                         ))}
                       </motion.tr>
                     );

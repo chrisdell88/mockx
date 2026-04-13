@@ -9,7 +9,7 @@ import {
   Activity, Loader2, TrendingUp, TrendingDown, ArrowRight,
   Users, Wifi, BarChart3, Zap, Clock, DollarSign,
   Bell, X, ExternalLink, AlertTriangle, CheckCircle2,
-  Minus, ChevronRight, Gauge, Trophy, Lock, CalendarClock,
+  Minus, ChevronRight, ChevronUp, ChevronDown, Gauge, Trophy, Lock, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRef, useState, useEffect } from "react";

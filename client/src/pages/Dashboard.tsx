@@ -62,6 +62,35 @@ type XLeader = {
   xScore: number; xScoreRank: number; xScoreSitesCount: number;
 };
 
+// ─── Outlet attribution from URL ─────────────────────────────────────────────
+const OUTLET_MAP: Record<string, string> = {
+  "walterfootball.com": "WalterFootball",
+  "nfl.com": "NFL.com",
+  "nflmockdraftdatabase.com": "NFL Mock Draft DB",
+  "sharpfootballanalysis.com": "Sharp Football",
+  "fantasypros.com": "FantasyPros",
+  "thehuddle.com": "The Huddle",
+  "huddlereport.com": "The Huddle Report",
+  "4for4.com": "4for4",
+  "pff.com": "PFF",
+  "profootballfocus.com": "PFF",
+  "cbssports.com": "CBS Sports",
+  "theathletic.com": "The Athletic",
+  "espn.com": "ESPN",
+  "draftshark.com": "DraftSharks",
+  "underdog.com": "Underdog",
+  "underdogfantasy.com": "Underdog",
+  "the33rdteam.com": "The 33rd Team",
+  "seahawksdraftblog.com": "Seahawks Draft Blog",
+};
+function urlToOutlet(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return OUTLET_MAP[host] ?? host;
+  } catch { return null; }
+}
+
 // ─── Scrolling Market Ticker ──────────────────────────────────────────────────
 function getTickerLastName(fullName: string): string {
   // Handle "Jr.", "Sr.", "III", "II", "IV" suffixes — keep them with last name
@@ -164,19 +193,19 @@ function MarketTicker({ players }: { players: ReturnType<typeof usePlayers>["dat
       <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-black/80 to-transparent z-10 pointer-events-none" />
       <div ref={trackRef} className="flex gap-0 whitespace-nowrap will-change-transform">
         {items.map((p, idx) => {
+          const rank = (idx % sorted.length) + 1;
           const change = p.adpChange ?? 0;
           const isUp = change > 0.2;
           const isDown = change < -0.2;
           const nameDisplay = getTickerLastName(p.name);
           return (
-            <span key={idx} className="inline-flex items-center gap-2 px-4 text-xs font-mono border-r border-white/5" data-testid={`ticker-item-${p.id}`}>
+            <span key={idx} className="inline-flex items-center gap-1.5 px-3 text-xs font-mono" data-testid={`ticker-item-${p.id}`}>
+              <span className="text-white/35">{rank}.</span>
               <span className={cn("font-semibold", isUp ? "text-[#00e676]" : isDown ? "text-[#ff4444]" : "text-white")}>{nameDisplay}</span>
-              <span className={cn("font-bold", isUp ? "text-[#00e676]" : isDown ? "text-[#ff4444]" : "text-muted-foreground")}>
-                #{p.currentAdp?.toFixed(1)}
-              </span>
-              {isUp && <span className="text-[#00e676] font-bold">▲{change.toFixed(1)}</span>}
-              {isDown && <span className="text-[#ff4444] font-bold">▼{Math.abs(change).toFixed(1)}</span>}
-              {!isUp && !isDown && <span className="text-muted-foreground">—</span>}
+              <span className="text-white/50">(#{p.currentAdp?.toFixed(1)})</span>
+              {isUp && <span className="text-[#00e676] font-bold">↑</span>}
+              {isDown && <span className="text-[#ff4444] font-bold">↓</span>}
+              <span className="text-white/20 pl-1.5">|</span>
             </span>
           );
         })}
@@ -455,6 +484,7 @@ function ActivityDrawer({ open, onClose, items, loading }: {
                 </div>
               ) : items.map(item => {
                 const isMock = item.boardType === "mock";
+                const outlet = urlToOutlet(item.url) ?? item.shortName ?? item.sourceName.split(/[\s(—]/)[0];
                 return (
                   <div
                     key={item.id}
@@ -469,9 +499,8 @@ function ActivityDrawer({ open, onClose, items, loading }: {
                         {isMock ? "MOCK" : "BB"}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white truncate leading-tight">{item.sourceName}</p>
+                        <p className="text-sm font-semibold text-white truncate leading-tight">{outlet}</p>
                         <p className="text-[10px] text-muted-foreground font-mono">
-                          {item.shortName && <span className="mr-1.5 text-white/60">{item.shortName}</span>}
                           {item.publishedAt ? format(new Date(item.publishedAt), "MMM d, yyyy") : "Unknown date"}
                         </p>
                       </div>

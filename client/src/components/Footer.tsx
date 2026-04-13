@@ -35,10 +35,10 @@ export default function Footer() {
           {/* Left: MOCKX branding */}
           <div className="flex flex-col items-center md:items-start gap-1">
             <span
-              className="text-2xl font-black tracking-tight"
-              style={{ fontFamily: "'Outfit', sans-serif", color: "#00d4ff" }}
+              className="text-2xl font-black tracking-tight text-white"
+              style={{ fontFamily: "'Outfit', sans-serif" }}
             >
-              MOCKX
+              MOCK<span style={{ color: "hsl(217.2 91.2% 59.8%)" }}>X</span>
             </span>
             <span className="text-[11px] text-white/40 font-mono uppercase tracking-widest">
               Part of the BallerX family

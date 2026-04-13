@@ -44,6 +44,7 @@ function makeBigBoardScraper(config: {
 
     for (const entry of entries) {
       const result = await ensurePlayer(entry.playerName, currentPlayers, entry.position, entry.college);
+      if (!result) continue;
       currentPlayers = result.players;
       dbPicks.push({ mockDraftId: mockDraft.id, playerId: result.player.id, pickNumber: entry.rank });
     }

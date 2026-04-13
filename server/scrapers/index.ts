@@ -35,26 +35,18 @@ export function matchPlayer(name: string, playerList: Player[]): Player | undefi
   return match;
 }
 
-// Ensure a player exists — match first, auto-create with pos/college if not found.
-// Returns the player and the (potentially expanded) player list for subsequent calls.
+// Match a player against the curated DB list — never auto-create.
+// Returns undefined if no match found; callers should skip unrecognized names.
 export async function ensurePlayer(
   name: string,
   players: Player[],
   position?: string | null,
   college?: string | null
-): Promise<{ player: Player; created: boolean; players: Player[] }> {
+): Promise<{ player: Player; created: boolean; players: Player[] } | undefined> {
   const matched = matchPlayer(name, players);
   if (matched) return { player: matched, created: false, players };
-
-  const newPlayer = await storage.createPlayer({
-    name,
-    position: position ?? null,
-    college: college ?? null,
-  });
-
-  const updated = [...players, newPlayer];
-  console.log(`[ensurePlayer] Auto-created: ${name} (${position ?? "?"}, ${college ?? "?"})`);
-  return { player: newPlayer, created: true, players: updated };
+  console.log(`[ensurePlayer] No match for "${name}" — skipping (not in curated player list)`);
+  return undefined;
 }
 
 // ─── HTTP Fetch ────────────────────────────────────────────────────────────

@@ -89,9 +89,10 @@ export async function scrapeMockDraftNfl(players: Player[], urlOverride?: string
   const dbPicks: Array<{ mockDraftId: number; playerId: number; pickNumber: number }> = [];
   let currentPlayers = players;
   for (const { pickNumber, playerName, position, college } of picks) {
-    const { player, players: updated } = await ensurePlayer(playerName, currentPlayers, position, college);
-    currentPlayers = updated;
-    dbPicks.push({ mockDraftId: mockDraft.id, playerId: player.id, pickNumber });
+    const result = await ensurePlayer(playerName, currentPlayers, position, college);
+    if (!result) continue;
+    currentPlayers = result.players;
+    dbPicks.push({ mockDraftId: mockDraft.id, playerId: result.player.id, pickNumber });
   }
 
   if (dbPicks.length > 0) {

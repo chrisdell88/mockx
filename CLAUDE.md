@@ -5,8 +5,8 @@ Interactive NFL Draft analytics dashboard that aggregates mock drafts, big board
 
 ## CRITICAL RULES
 - This is a SEPARATE project from BracketX. Do NOT reference or modify BracketX files.
-- Project folder: /Users/chrisdell/Downloads/draftx-project/
-- GitHub repo: chrisdell88/draft-stock-visualizer
+- Project folder: ~/Projects/mockx
+- GitHub repo: chrisdell88/mockx
 
 ## TECH STACK
 - Frontend: React 18 + TypeScript, Tailwind CSS, Radix UI (shadcn/ui), Recharts, Framer Motion, Wouter
@@ -32,7 +32,7 @@ Interactive NFL Draft analytics dashboard that aggregates mock drafts, big board
 ## ENVIRONMENT VARIABLES NEEDED
 - DATABASE_URL — PostgreSQL connection string
 - SESSION_SECRET — Admin password + session secret
-- ODDS_API_KEY — the-odds-api.com key (b5e6b3e773229db2fc9cb916f87d3daf)
+- ODDS_API_KEY — the-odds-api.com key (stored in Vercel env vars + 1Password, NEVER hardcoded here)
 
 ## DEPLOYMENT
 - Local dev: `npm run dev` (port 5000)
@@ -42,9 +42,8 @@ Interactive NFL Draft analytics dashboard that aggregates mock drafts, big board
 
 ## ODDS API
 - Provider: the-odds-api.com
-- Key: b5e6b3e773229db2fc9cb916f87d3daf
+- Key: stored in Vercel env vars + 1Password (account-level key, shared across projects)
 - Sport key: basketball_ncaab (for BracketX) / americanfootball_nfl_draft (for Draft X)
-- Same API key works across projects — it's account-level, not project-level
 
 ## USER PREFERENCES
 - Non-technical user, learning Claude Code

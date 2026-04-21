@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk *)",
+      "Bash(curl -sS *)",
+      "Bash(curl -sSL *)"
+    ]
+  }
+}

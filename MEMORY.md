@@ -47,24 +47,29 @@ Until the 4 steps above are done on a given device, you can only do **code edits
 - **Durable, cross-device facts** → this file (`MEMORY.md`), committed to GitHub
 - **Device-local scratch** → `~/.claude/projects/.../memory/` (ephemeral, per-device, don't rely on it across devices)
 
-## Current state (2026-04-19, 4 days pre-draft)
+## Current state (2026-04-20, 3 days pre-draft)
 
-### In progress
-- **MDDB accuracy-data coverage audit.** User confirmed MDDB source totals per year: 2021=1,312 / 2022=1,379 / 2023=1,529 / 2024=1,514 / 2025=1,530 submissions. We only have top ~100–240 submissions ingested per year (unique analysts after dedup: 178 / 88 / 105 / 111 / 82). The note inside `nflmdd-historical.json` claiming "full data 2021–2024" does not match reality — we likely have pages 1–4 only, losing 200–600 unique analysts per year.
-- Goal: re-scrape all pages × 5 years, dedupe by analyst name, keep best score per analyst per year, reseed `analyst_accuracy_scores` for `site='nflmdd'`, then `recompute-xscores.mjs`.
-- MDDB has bot protection — plain curl gets redirected to `/restricted`. Our existing scraper uses `fetchHtml` which has headers; needs to be tested against `/mock-drafts/YEAR/final-scores?page=N`.
+### Just shipped (2026-04-20)
+- **MDDB full 5-year scrape:** `scrape-nflmdd-all.mjs` pulls all pages via Googlebot UA (bypasses bot detection; robots.txt allows it). Output: `nflmdd-full.json` (7MB, ~2,144 unique analyst-years across 2021–2025). Detailed counts: 444/417/435/436/411.
+- **Live DB reseeded:** `seed-nflmdd-full.mjs` replaced 354 old nflmdd rows with 2,143 new rows; auto-created 845 new analyst records.
+- **X-score 3-year rule:** `recompute-xscores.mjs` now requires ≥3 DISTINCT draft years (not site-years) + 2025 data. Before: 584 ranked (164 were one-hit wonders at top). After: 344 ranked, all with sustained multi-year presence. Analysts with <3 distinct years keep raw per-year scores but `x_score`/`x_score_rank` = NULL.
+- **Live ADP refresh:** `scripts/run-scrapers-now.ts` runs all 13 scrapers + `synthesizeAdpFromPicks()` against live Supabase. 56 sec end-to-end. Use this as a manual trigger — see KNOWN ISSUE below.
+
+### KNOWN ISSUE — prod cron is broken
+- `POST /api/internal/cron` on mockx.co returns 500: `Cannot find module '/var/task/server/scrapers/index'`. Vercel build isn't packaging `server/scrapers/*` into the serverless function output. Daily 6am cron is dead until someone fixes the build config.
+- Workaround: run `npx tsx scripts/run-scrapers-now.ts` locally (from any device with `.env` set up).
+- TODO: debug the Vercel bundle — likely a `vercel.json` includeFiles or `vite`/`esbuild` config issue.
 
 ### Known good (do NOT re-scrape)
 - WalterFootball 2021–2025 — complete (WF only has ~30/year, take-everyone site): `seed-wf-historical.mjs` + `seed-accuracy.mjs` lines 216–251
 - FantasyPros 2021–2025 — user confirmed counts are correct as-is (`fp-{year}.tsv` files)
 - THR 2021–2025 — user confirmed correct (`thr-5year.csv`, 174 analysts × 5 years, source: thehuddlereport.com/mock-5-year)
-
-### Next session (after device setup is done)
-1. Test `fetchHtml` against one MDDB final-scores page to confirm scraping is viable
-2. If viable: write one-off paginated scraper for all 5 years
-3. Dedupe, reseed, recompute x-scores
-4. Verify counts on live Supabase match what's on mockx.co
+- MDDB 2021–2025 — FULL DATA now in `nflmdd-full.json` + live DB (2026-04-20 scrape)
 
 ### Not started
 - Verifying live mockx.co data matches `server/data/accuracy/*` source files end-to-end
 - Draft-day plan / post-draft accuracy grading workflow for 2026
+
+### Pending user discussion (after MDDB work lands)
+- **X-score formula changes** — user wants to revisit the weighting in `recompute-xscores.mjs` (current: site weights `thr:1, fp:1, wf:0.5, nflmdd:1, thr_bigboard:1`; year weights `2025:3.25, 2024:2, 2023:1.5, 2022:1, 2021:0.75`; 2025 data required to qualify)
+- **ADP source selection** — decide which mock-draft sources feed the live consensus ADP shown on mockx.co. Currently wired scrapers (`server/scrapers/index.ts` SCRAPERS array) include walterfootball_walt/charlie, mddb_consensus, mddb_bigboard, mcshay_report, fantasypros_freedman, etc. Review for quality/weighting.

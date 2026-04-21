@@ -1,8 +1,14 @@
 /**
  * Recompute X Scores with updated site weights.
  * Site weights: all = 1x, WF = 0.5x (no longer favoring THR/FP over each other)
- * Year weights: 2025=3, 2024=2, 2023=1.5, 2022=1, 2021=0.75
- * Qualification: must have at least 1 score from 2025
+ * Year weights: 2025=3.25, 2024=2, 2023=1.5, 2022=1, 2021=0.75
+ * Qualification:
+ *   - Must have at least 1 score from 2025 (current)
+ *   - Must have scores across ≥3 DISTINCT draft years (not site-years) — proves
+ *     sustained presence, not one lucky submission across multiple sites
+ * Analysts with <3 distinct years keep their raw per-year accuracy scores in
+ * analyst_accuracy_scores (so profile pages still show what they scored each
+ * year), but x_score and x_score_rank are NULLed out.
  */
 
 import pg from 'pg';
@@ -39,6 +45,12 @@ async function main() {
       const has2025 = entries.some(e => e.year === 2025);
       if (!has2025) continue; // must have 2025 to qualify
 
+      // Require ≥3 DISTINCT draft years (not site-years). An analyst with
+      // FP 2024 + MDDB 2024 + FP 2025 has 3 site-years but only 2 distinct
+      // years — that's not sustained presence, so they don't qualify for X-score.
+      const distinctYears = new Set(entries.map(e => e.year));
+      if (distinctYears.size < 3) continue;
+
       let wSum = 0, wTotal = 0;
       for (const e of entries) {
         const sw = SITE_W[e.site] ?? 1;
@@ -49,7 +61,12 @@ async function main() {
       }
       const xScore = wTotal > 0 ? Math.round((wSum / wTotal) * 10000) / 10000 : null;
       if (xScore !== null) {
-        results.push({ analystId: Number(analystId), xScore, siteCount: entries.length });
+        results.push({
+          analystId: Number(analystId),
+          xScore,
+          siteCount: entries.length,
+          yearCount: distinctYears.size,
+        });
       }
     }
 

@@ -13,44 +13,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (path === "/players" || path === "/players/") {
+      // Windowed ADP: compute per-player ADP across 5 time windows (L24/L3/L7/L30/All)
+      // filtered to only picks from qualifying analysts:
+      //   - x_score_rank ≤ 150 (auto, top individual accuracy performers), OR
+      //   - manually_included_in_adp = true (user-whitelisted individuals + aggregates)
+      // currentAdp preserved for backward compat: falls back L24 → L3 → L7 → L30 → All.
+      // adpChange is L24 vs. L7 (today's consensus vs. last-week consensus).
       const result = await pool.query(`
+        WITH qualifying_picks AS (
+          SELECT mdp.player_id, mdp.pick_number, md.published_at
+          FROM mock_draft_picks mdp
+          JOIN mock_drafts md ON md.id = mdp.mock_draft_id
+          JOIN analysts a ON a.id = md.analyst_id
+          WHERE a.x_score_rank <= 150 OR a.manually_included_in_adp = true
+        ),
+        player_adps AS (
+          SELECT player_id,
+            AVG(pick_number) FILTER (WHERE published_at >= NOW() - INTERVAL '24 hours')::numeric AS adp_l24,
+            COUNT(*) FILTER (WHERE published_at >= NOW() - INTERVAL '24 hours')::int AS n_l24,
+            AVG(pick_number) FILTER (WHERE published_at >= NOW() - INTERVAL '3 days')::numeric AS adp_l3,
+            COUNT(*) FILTER (WHERE published_at >= NOW() - INTERVAL '3 days')::int AS n_l3,
+            AVG(pick_number) FILTER (WHERE published_at >= NOW() - INTERVAL '7 days')::numeric AS adp_l7,
+            COUNT(*) FILTER (WHERE published_at >= NOW() - INTERVAL '7 days')::int AS n_l7,
+            AVG(pick_number) FILTER (WHERE published_at >= NOW() - INTERVAL '30 days')::numeric AS adp_l30,
+            COUNT(*) FILTER (WHERE published_at >= NOW() - INTERVAL '30 days')::int AS n_l30,
+            AVG(pick_number)::numeric AS adp_all,
+            COUNT(*)::int AS n_all
+          FROM qualifying_picks
+          GROUP BY player_id
+        )
         SELECT p.*,
-          latest.adp_value::numeric as current_adp,
+          adps.adp_l24, adps.n_l24,
+          adps.adp_l3, adps.n_l3,
+          adps.adp_l7, adps.n_l7,
+          adps.adp_l30, adps.n_l30,
+          adps.adp_all, adps.n_all,
+          COALESCE(adps.adp_l24, adps.adp_l3, adps.adp_l7, adps.adp_l30, adps.adp_all) AS current_adp,
           CASE
-            WHEN latest.adp_value IS NOT NULL AND prev7.adp_value IS NOT NULL
-            THEN (prev7.adp_value::numeric - latest.adp_value::numeric)
+            WHEN adps.adp_l24 IS NOT NULL AND adps.adp_l7 IS NOT NULL
+            THEN (adps.adp_l7 - adps.adp_l24)
             ELSE NULL
-          END as adp_change,
+          END AS adp_change,
           CASE
-            WHEN latest.adp_value IS NOT NULL AND prev7.adp_value IS NOT NULL AND (prev7.adp_value::numeric - latest.adp_value::numeric) > 0.2 THEN 'up'
-            WHEN latest.adp_value IS NOT NULL AND prev7.adp_value IS NOT NULL AND (prev7.adp_value::numeric - latest.adp_value::numeric) < -0.2 THEN 'down'
+            WHEN adps.adp_l24 IS NOT NULL AND adps.adp_l7 IS NOT NULL AND (adps.adp_l7 - adps.adp_l24) > 0.2 THEN 'up'
+            WHEN adps.adp_l24 IS NOT NULL AND adps.adp_l7 IS NOT NULL AND (adps.adp_l7 - adps.adp_l24) < -0.2 THEN 'down'
             ELSE 'flat'
-          END as trend
+          END AS trend
         FROM players p
-        LEFT JOIN LATERAL (
-          SELECT adp_value FROM adp_history WHERE player_id = p.id ORDER BY date DESC LIMIT 1
-        ) latest ON true
-        LEFT JOIN LATERAL (
-          SELECT adp_value FROM adp_history WHERE player_id = p.id AND date <= NOW() - INTERVAL '7 days' ORDER BY date DESC LIMIT 1
-        ) prev7 ON true
-        ORDER BY latest.adp_value::numeric ASC NULLS LAST
+        LEFT JOIN player_adps adps ON adps.player_id = p.id
+        ORDER BY COALESCE(adps.adp_l24, adps.adp_l3, adps.adp_l7, adps.adp_l30, adps.adp_all) ASC NULLS LAST
       `);
-      // Normalize to camelCase for frontend compatibility
+      const toNum = (v: any) => v !== null && v !== undefined ? Number(v) : null;
       const players = result.rows.map((r: any) => ({
         ...r,
-        currentAdp: r.current_adp !== null ? Number(r.current_adp) : null,
-        adpChange: r.adp_change !== null ? Number(r.adp_change) : null,
+        currentAdp: toNum(r.current_adp),
+        adpChange: toNum(r.adp_change),
+        adpL24: toNum(r.adp_l24), nL24: r.n_l24 ?? 0,
+        adpL3: toNum(r.adp_l3), nL3: r.n_l3 ?? 0,
+        adpL7: toNum(r.adp_l7), nL7: r.n_l7 ?? 0,
+        adpL30: toNum(r.adp_l30), nL30: r.n_l30 ?? 0,
+        adpAll: toNum(r.adp_all), nAll: r.n_all ?? 0,
         imageUrl: r.image_url ?? null,
-        rasScore: r.ras_score !== null ? Number(r.ras_score) : null,
-        fortyYard: r.forty_yard !== null ? Number(r.forty_yard) : null,
+        rasScore: toNum(r.ras_score),
+        fortyYard: toNum(r.forty_yard),
         benchPress: r.bench_press ?? null,
-        verticalJump: r.vertical_jump !== null ? Number(r.vertical_jump) : null,
+        verticalJump: toNum(r.vertical_jump),
         broadJump: r.broad_jump ?? null,
-        coneDrill: r.cone_drill !== null ? Number(r.cone_drill) : null,
-        shuttleRun: r.shuttle_run !== null ? Number(r.shuttle_run) : null,
+        coneDrill: toNum(r.cone_drill),
+        shuttleRun: toNum(r.shuttle_run),
         comparablePlayer: r.comparable_player ?? null,
-        dominatorRating: r.dominator_rating !== null ? Number(r.dominator_rating) : null,
-        breakoutAge: r.breakout_age !== null ? Number(r.breakout_age) : null,
+        dominatorRating: toNum(r.dominator_rating),
+        breakoutAge: toNum(r.breakout_age),
         playerProfilerUrl: r.player_profiler_url ?? null,
       }));
       return res.json(players);

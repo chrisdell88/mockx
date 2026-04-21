@@ -55,10 +55,11 @@ Until the 4 steps above are done on a given device, you can only do **code edits
 - **X-score 3-year rule:** `recompute-xscores.mjs` now requires ≥3 DISTINCT draft years (not site-years) + 2025 data. Before: 584 ranked (164 were one-hit wonders at top). After: 344 ranked, all with sustained multi-year presence. Analysts with <3 distinct years keep raw per-year scores but `x_score`/`x_score_rank` = NULL.
 - **Live ADP refresh:** `scripts/run-scrapers-now.ts` runs all 13 scrapers + `synthesizeAdpFromPicks()` against live Supabase. 56 sec end-to-end. Use this as a manual trigger — see KNOWN ISSUE below.
 
-### KNOWN ISSUE — prod cron is broken
-- `POST /api/internal/cron` on mockx.co returns 500: `Cannot find module '/var/task/server/scrapers/index'`. Vercel build isn't packaging `server/scrapers/*` into the serverless function output. Daily 6am cron is dead until someone fixes the build config.
-- Workaround: run `npx tsx scripts/run-scrapers-now.ts` locally (from any device with `.env` set up).
-- TODO: debug the Vercel bundle — likely a `vercel.json` includeFiles or `vite`/`esbuild` config issue.
+### KNOWN ISSUE — prod cron is broken (still)
+- `POST /api/internal/cron` on mockx.co returns 500: `Cannot find module '/var/task/server/scrapers/index'`. The handler uses `await import()` dynamic imports that Vercel's bundler doesn't follow.
+- Attempted fix (2026-04-20): hoist to static imports at top of api/index.ts. Result: entire serverless function crashed at cold-start (FUNCTION_INVOCATION_FAILED on every endpoint). Probably because `server/routes.ts` or `server/scrapers/*` has a side effect at import time incompatible with Vercel's runtime (node-cron loaded at top-level is one suspect). **Reverted.**
+- **Workaround in use:** `npx tsx scripts/run-scrapers-now.ts` runs from any device with .env set up. 56 sec end-to-end.
+- **Post-draft TODO:** either (a) import only `SCRAPERS` array + minimal deps into api/ without dragging in node-cron, OR (b) move the cron handler to a separate api/cron.ts function, OR (c) use `vercel.json` `includeFiles` with a proper bundle strategy. Don't attempt before draft.
 
 ### Known good (do NOT re-scrape)
 - WalterFootball 2021–2025 — complete (WF only has ~30/year, take-everyone site): `seed-wf-historical.mjs` + `seed-accuracy.mjs` lines 216–251

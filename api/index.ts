@@ -225,7 +225,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (path === "/accuracy/leaderboard" || path === "/accuracy/leaderboard/") {
-      const minYears = parseInt(url.searchParams.get("minYears") || "1");
+      // ═══════════════════════════════════════════════════════════════════════
+      // ⚠️  DUPLICATED LOGIC — KEEP IN SYNC with:
+      //     - server/storage.ts `getAccuracyLeaderboard` (local dev path)
+      //     - server/data/accuracy/recompute-xscores.mjs (writes to analysts table)
+      // If you change site weights, year weights, or qualification rules, update
+      // all three or behavior diverges between local dev, prod API, and the
+      // stored a.x_score column. Production (THIS file) is what mockx.co runs.
+      // TODO post-draft: extract to shared/xscore.ts.
+      // ═══════════════════════════════════════════════════════════════════════
+      const _minYears = parseInt(url.searchParams.get("minYears") || "1"); // kept for backward compat; qualification enforced below
       const analysts_result = await pool.query(`
         SELECT a.id, a.name, a.outlet,
           a.x_score, a.x_score_rank, a.x_score_sites_count,
